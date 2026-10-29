@@ -1,0 +1,2169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MercyCut Web v2 — Movement Clips</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;height:100vh;overflow:hidden;background:#1e1e24;color:#e8e8ec;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;display:flex;flex-direction:column}
+  header{padding:14px 18px;border-bottom:1px solid #444} h1{margin:0 0 4px;font-size:20px} p{margin:4px 0;color:#c9c9d1}
+  .wrap{width:100%;max-width:none;margin:0;padding:10px 14px;flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+  .editorShell{display:grid;grid-template-columns:300px minmax(360px,1.5fr) minmax(300px,1fr);gap:12px;flex:1;min-height:0}
+  .clipSidebar,.previewColumn,.controlColumn{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .clipSidebar{display:flex;flex-direction:column;background:#26262e;border:1px solid #3a3a44;border-radius:10px;padding:12px}
+  .previewColumn .card,.controlColumn .card{margin-bottom:10px}
+  @media(max-width:1100px){.editorShell{grid-template-columns:250px minmax(0,1fr);grid-template-rows:minmax(360px,1fr) minmax(280px,.8fr);overflow-y:auto}.clipSidebar{grid-row:1 / span 2}.previewColumn{grid-column:2;grid-row:1}.controlColumn{grid-column:2;grid-row:2;overflow:visible}}
+  @media(max-width:760px){body{height:auto;min-height:100vh;overflow:auto}.wrap{overflow:visible}.editorShell{display:flex;flex-direction:column;overflow:visible}.clipSidebar{max-height:45vh}.previewColumn,.controlColumn{overflow:visible}}
+  button{background:#3a3a44;color:#fff;border:1px solid #55555f;padding:8px 12px;border-radius:6px;cursor:pointer}
+  button:hover{background:#4a4a56} button:disabled{opacity:.5}
+  input,select{background:#2a2a32;color:#fff;border:1px solid #44444e;border-radius:4px;padding:6px}
+  .card{background:#26262e;border:1px solid #3a3a44;border-radius:10px;padding:12px;margin-bottom:12px}
+  #stage{position:relative;background:#000;border:1px solid #444;overflow:hidden;aspect-ratio:16/9}
+  #stage video{width:100%;height:100%;object-fit:contain;display:block}
+  #cropBox{position:absolute;border:3px solid #c7a45a;box-shadow:0 0 0 9999px rgba(0,0,0,.35);cursor:move;touch-action:none}
+  #cropBox .tag{position:absolute;top:-22px;left:0;background:#c7a45a;color:#000;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
+  #candidates{position:absolute;inset:0;pointer-events:none}
+  .personBox{position:absolute;border:3px solid #2ecc71;border-radius:4px;cursor:pointer;pointer-events:auto}
+  .personBox.dim{opacity:.35}
+  .personBox.sel{border-color:#bb86fc;border-width:5px;opacity:1}
+  .personBox span{position:absolute;top:-24px;left:0;background:#2ecc71;color:#000;font-size:16px;font-weight:800;padding:3px 8px;border-radius:5px;white-space:nowrap}
+  .personBox.sel span{background:#bb86fc;color:#160c20}
+  #personPicker{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .personChoice{min-width:112px;min-height:54px;font-weight:700}
+  .personChoice .number{font-size:20px;font-weight:900;margin-right:5px}
+  .personChoice.sel{background:#69418e;border-color:#bb86fc;outline:2px solid #bb86fc}
+  #detectionInfo{min-height:20px;color:#c9c9d1}
+  #trackStatus{font-size:13px;color:#c9c9d1}
+  .clipSidebar h2{font-size:17px;margin:0 0 8px}.clipTools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+  .clipTools input,.clipTools select{width:100%;min-width:0}.clipList{flex:1;min-height:100px;overflow-y:auto}
+  .clipCard{border:1px solid #454550;border-radius:8px;background:#202027;padding:8px;margin:7px 0;cursor:pointer}
+  .clipCard.selected{border:2px solid #c7a45a;background:#302b20}.clipCard-top{display:flex;gap:7px;align-items:center}
+  .clipThumb{position:relative;width:94px;height:58px;flex:none;background:#111 center/cover no-repeat;border-radius:5px;border:1px solid #444}
+  .clipNumber{position:absolute;left:4px;top:4px;background:#111d;color:#fff;padding:1px 5px;border-radius:4px;font-weight:800}
+  .clipTitle{width:100%;min-width:0}.clipTimes,.clipMeta{font-size:12px;color:#c9c9d1;margin-top:5px}
+  .clipActions{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.clipActions button{padding:5px 7px;font-size:12px}.clipActions .reviewClipAction{border-color:#a98724;color:#ffe08a}.clipActions .approveClipAction{border-color:#43875a;color:#9ef0b1}
+  .clipCard:focus-visible{outline:3px solid #e1c16e;outline-offset:2px}.clipMore{position:relative}.clipMore summary{cursor:pointer;padding:5px 8px;list-style:none}.clipMore summary::-webkit-details-marker{display:none}.clipMore[open]{border:1px solid #555;border-radius:6px;padding:4px}.clipMore button{margin:2px}
+  .clipActions label{display:flex;gap:4px;align-items:center;font-size:12px}
+  #appStatus{margin:0;max-height:65px;overflow:auto;flex:none}
+  .clipHelp{font-size:12px;color:#bdbdc6}.clipHelp summary{cursor:pointer;color:#d9d9e0}
+  .timelinePanel{margin-top:10px;border-top:1px solid #41414b;padding-top:10px}
+  #rangeInstruction{min-height:21px;color:#d9d9e0;font-weight:600}
+  #timelineWrap{height:58px;position:relative;margin:6px 10px 2px;touch-action:none;user-select:none}
+  #timelineTrack{position:absolute;left:0;right:0;top:25px;height:10px;background:#42424d;border-radius:6px;overflow:hidden}
+  #outsideBefore,#outsideAfter{position:absolute;top:0;bottom:0;background:#101015aa;pointer-events:none}
+  #outsideBefore{left:0}#outsideAfter{right:0}
+  #rangeHighlight{position:absolute;top:0;bottom:0;background:#c7a45a88;border-top:2px solid #dfbf76;border-bottom:2px solid #dfbf76;pointer-events:none}
+  #slider{position:absolute;inset:0;width:100%;height:58px;margin:0;opacity:.01;z-index:4;cursor:pointer}
+  #playhead{position:absolute;top:9px;bottom:6px;width:3px;background:#fff;box-shadow:0 0 0 1px #15151a;z-index:5;pointer-events:none;transform:translateX(-50%)}
+  .rangeMarker{position:absolute;top:9px;height:34px;min-width:54px;z-index:7;transform:translateX(-50%);font-weight:800;padding:4px 7px;border:2px solid #fff;border-radius:5px;cursor:ew-resize;touch-action:none}
+  #startMarker{background:#167a4c;color:#fff}#endMarker{background:#b75c16;color:#fff}
+  .rangeMarker[hidden]{display:none}.rangeMarker.activeMarker{box-shadow:0 0 0 3px #f4e4b6}.rangeMarker:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .rangeReadouts{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:700;padding:5px 0}
+  .rangeReadouts span:nth-child(1){color:#8ce99e}.rangeReadouts span:nth-child(3){color:#ffc078}
+  .timelineControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  #addClip,#saveChanges{background:#9a7837;color:#111;font-weight:800;border-color:#e1c16e}
+  #saveChanges[hidden],#cancelChanges[hidden],#addClip[hidden]{display:none}
+  #clipName{max-width:220px}.savedClipLabel{font-weight:700;color:#e1c16e}
+  .captionPanel{border:1px solid #484451;background:#24232c;border-radius:8px;padding:10px;margin:8px 0}.captionList{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:5px;margin:8px 0}.captionRow{display:grid;grid-template-columns:1fr auto;gap:6px;border:1px solid #514d5b;border-radius:6px;padding:7px;cursor:pointer}.captionRow.active{border:2px solid #ffc107;background:#302b20}.captionRow small{color:#c9c9d1}.captionRow button{padding:3px 6px}.captionControls{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.captionControls input,.captionControls select{max-width:100%}.captionTrack{height:48px;position:relative;background:#191820;border:1px solid #45414d;border-radius:5px;margin:2px 10px 8px;overflow:hidden}.captionBlock{position:absolute;top:5px;height:36px;min-width:5px;background:#6a1b9a;border:1px solid #d7b5e8;border-radius:4px;color:#fff;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:grab;padding:8px 10px}.captionBlock.selected{background:#4b0082;border:2px solid #ffc107}.captionBlock .captionEdge{position:absolute;top:0;bottom:0;width:6px;background:#ffc107;cursor:ew-resize}.captionBlock .captionEdge.left{left:0}.captionBlock .captionEdge.right{right:0}.captionPreview{font-weight:800;text-align:center;white-space:pre-wrap;line-height:1.12;pointer-events:none;text-shadow:0 1px 2px #111}.captionWords span{display:inline-block;margin-right:.25em}.captionStatus{font-size:12px;color:#ded5eb;min-height:20px}
+  .captionTrackPlayhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;pointer-events:none}
+  .approvalBadge{display:inline-block;border:1px solid #746482;border-radius:10px;padding:1px 6px;margin:2px 3px 2px 0;font-weight:700}.approvalBadge.approved{color:#8ce99e;border-color:#4e8a61}.approvalBadge.rejected{color:#ff8787;border-color:#9d4e4e}.clipActions .danger{border-color:#a84f4f;color:#ffb4b4}
+  dialog{background:#282830;color:#eee;border:1px solid #777;border-radius:10px;padding:20px;max-width:430px}
+  dialog::backdrop{background:#0009}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:16px}
+  #outCanvas{background:#000;border:1px solid #444;max-height:320px;max-width:100%}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  .row label{color:#c9c9d1} input[type=range]{flex:1}
+  #log{white-space:pre-wrap;background:#111;border:1px solid #333;border-radius:6px;padding:8px;max-height:140px;overflow:auto;font-size:13px}
+  .clip{padding:8px;border:1px solid #444;border-radius:6px;margin:6px 0;cursor:pointer} .clip.sel{border-color:#c7a45a}
+  progress{width:100%} .warn{color:#ffd54f} .ok{color:#8ce99e}
+</style>
+</head>
+<body>
+<header>
+  <h1>MercyCut Web v2 — Movement Clips</h1><p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
+  <p><strong>No Python. No install. No upload.</strong> Open this file in Chrome or Edge, pick a video from your computer, and edit it right in this tab. Your video never leaves this device — there is no server here to send it to.</p>
+  <p class="warn">Honest limits, please read: browsers cannot play every format (MP4 works best; MKV and some MOV files may not play). Export runs in real time, so a 60-second clip takes about 60 seconds to export, and you must keep this tab in front while it exports. For very long services, cut short clips first. The desktop version is still faster for 2–3 hour files.</p>
+</header>
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <label>Video file: <input type="file" id="fileInput" accept="video/*,.mkv,.mov"></label>
+      <button id="saveProj">Save Project</button>
+      <label>Open Project: <input type="file" id="projInput" accept=".json,.mercycut"></label>
+    </div>
+    <div id="info">No video loaded yet. Pick an MP4 livestream to begin.</div>
+  </div>
+
+  <div class="editorShell">
+    <aside class="clipSidebar" aria-label="Clip library">
+      <h2>Clip Library <span id="clipCount">0</span></h2>
+      <div class="clipTools">
+        <input id="clipSearch" type="search" placeholder="Search clips" aria-label="Search clips">
+        <select id="clipSort" aria-label="Sort clips"><option value="created">Created order</option><option value="start">Start time</option><option value="duration">Duration</option></select>
+        <select id="clipFilter" aria-label="Filter by tracking status"><option value="all">All tracking statuses</option><option value="queued">Tracking queued</option><option value="in-progress">Tracking in progress</option><option value="ready">Tracking ready</option><option value="needs-review">Needs tracking review</option><option value="failed">Tracking failed</option><option value="waiting-target">Select a person</option></select>
+        <select id="approvalFilter" aria-label="Filter by approval status"><option value="all">All approval states</option><option value="suggested">Suggested</option><option value="needs-review">Needs review</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
+        <select id="exportFilter" aria-label="Filter export status"><option value="all">Any export status</option><option value="not-exported">Not exported</option><option value="exported">Exported</option><option value="failed">Export failed</option></select>
+      </div>
+      <div class="clipTools"><button id="selectAllClips">Select all</button><button id="deselectAllClips">Deselect all</button></div>
+      <div id="clipList" class="clipList" aria-live="polite"></div>
+      <div class="clipActions"><button id="approveSelectedClips">Approve Selected</button><button id="rejectSelectedClips" class="danger">Reject Selected</button><button id="exportSelectedClips">Export Selected Approved</button><button id="exportPickedClips" title="Export the clips you ticked, even if you have not watched and approved each one. Only clips with tracking ready are exported.">Save Picked Clips</button><button id="exportPickedClipsNoCaptions" title="Export the clips you ticked without burned-in captions. Only clips with tracking ready are exported.">Save Picked Without Captions</button><button id="exportAllClips">Export All Approved</button></div>
+    </aside>
+    <div class="previewColumn">
+      <div class="card">
+        <div id="stage">
+          <video id="video" playsinline preload="metadata"></video>
+          <div id="candidates"></div>
+          <div id="cropBox" style="display:none"><span class="tag">CROP — drag me</span></div>
+        </div>
+        <div class="row">
+          <button id="playBtn">▶ Play Video</button>
+          <span id="timeLabel">00:00 / 00:00</span>
+          <button id="playClip">▶ Play Clip</button>
+          <label><input type="checkbox" id="loopClip"> Loop preview</label>
+          <button id="toggleOutput" aria-pressed="false">Show vertical preview</button>
+        </div>
+        <div id="clipReviewStatus" class="captionStatus" aria-live="polite">Choose Review Clip on a clip card to watch the complete clip before approval.</div>
+        <div class="row"><button id="detectPeople">Find people again</button></div>
+        <div id="detectionInfo" aria-live="polite">Choose a video to find people in the current frame.</div>
+        <div id="personPicker" aria-label="People found in this frame"></div>
+        <div id="outputPreview" style="display:none"><canvas id="outCanvas" width="360" height="640"></canvas><div id="cropInfo">Crop preview updates as you play or scrub.</div></div>
+        <div class="timelinePanel">
+          <div id="rangeInstruction" aria-live="polite">Move the playhead to the beginning, then set START.</div>
+          <div id="timelineWrap" aria-label="Video timeline. Click to set the active marker; Alt-click sets START and Shift-click sets END.">
+            <div id="timelineTrack"><div id="outsideBefore"></div><div id="rangeHighlight"></div><div id="outsideAfter"></div></div>
+            <div id="playhead"></div>
+            <button id="startMarker" class="rangeMarker" hidden title="Drag START. Use left and right arrows to adjust by a tenth of a second.">START</button>
+            <button id="endMarker" class="rangeMarker" hidden title="Drag END. Use left and right arrows to adjust by a tenth of a second.">END</button>
+            <input type="range" id="slider" min="0" max="1000" value="0" aria-label="Video playhead">
+          </div>
+          <div class="rangeReadouts"><span id="startReadout">START —</span><span id="lengthReadout">SELECTED LENGTH —</span><span id="endReadout">END —</span><span id="currentTimeReadout">PLAYHEAD 00:00.000</span></div>
+          <div class="timelineControls">
+            <button id="setStart" title="Set the clip start at the current playhead">Set Start</button>
+            <button id="setEnd" title="Set the clip end at the current playhead">Set End</button>
+            <label>Clip title <input type="text" id="clipName" value="New clip" size="20"></label>
+            <button id="newClip">New Clip</button>
+            <button id="addClip" hidden>+ Add Clip</button>
+            <button id="saveChanges" hidden>Save Changes</button>
+            <button id="cancelChanges" hidden>Cancel Changes</button>
+          </div>
+          <input type="hidden" id="startIn"><input type="hidden" id="endIn">
+          <div id="clipModeLabel" class="savedClipLabel" aria-live="polite">Creating a new clip</div>
+          <details class="clipHelp"><summary>Timeline tips</summary><p>Click the timeline to move the playhead and adjust the active marker. Click a marker to make it active. Hold Alt while clicking to set START, or Shift to set END. Drag either marker; markers stop before crossing each other. Press S and E at the playhead to set them. Arrow keys move a focused marker by 0.1 seconds; Shift plus an arrow moves it by 1 second.</p></details>
+          <h4>Caption timing</h4>
+          <div class="captionControls"><label>Timeline zoom <input id="captionZoom" type="range" min="1" max="8" value="1"></label><span id="captionZoomLabel">Full clip</span></div>
+          <div id="captionTrack" class="captionTrack" aria-label="Caption timing track"></div>
+        </div>
+        <p>Tip: drag the gold box to frame the person. For movement, drag it at different times and click “Add Keyframe” — the crop glides between corrections.</p>
+      </div>
+    </div>
+
+    <div class="controlColumn">
+
+      <div class="card" id="movementCard">
+        <h3 style="margin-top:0">Find Best Movement Clips — no captions, no transcript, no prompt</h3>
+        <p>Movement means how far the person you picked moves — left, right, up, down — between samples. The app watches the whole video, measures movement in every 2-minute window, and picks the windows with the most movement. Singing, music, and quiet talking do not matter here, because we watch movement, not sound.</p>
+        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking is ready, tick the clips you want in My Clips and press “Save Picked Clips”.</p>
+        <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
+        <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button></div>
+        <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
+        <p style="font-size:0.9em">Fastest = fewest checks, quickest, crop may jump a bit. Fast &amp; Smooth = the balanced default. Most Accurate = checks every 0.5 seconds at full size, slowest, most precise. Smoothest = very smooth crop, but may lag a little if the person walks fast. Export itself is still real-time in a browser — a 2-minute clip takes about 2 minutes to save — that part cannot be sped up here without a different export tool.</p>
+        <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
+        <div class="row"><button id="movementFind">Find Best Movement Clips</button><button id="movementStop" disabled>Stop Movement Search</button></div>
+        <div id="movementStatus" class="captionStatus" aria-live="polite">Load a video, pick a person, then press Find Best Movement Clips. Clips will be about 2 minutes long (90 to 150 seconds).</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Autopilot — walk away</h3>
+        <p>Press Start Autopilot, then walk away. It runs one clip at a time: it picks the person to follow (the one you already picked, or the largest, most central person if you have not picked one), tracks them, then makes captions with local Whisper. It does not download anything and does not approve clips. When you come back, tick the clips you want and press Save Picked Clips.</p>
+        <p class="warn">Keep this tab open and your computer awake. If you close the tab or the computer sleeps, autopilot stops where it is. Press Start again and it will skip clips that are already done.</p>
+        <div class="captionControls"><button id="autopilotAll">Start Autopilot — All Clips</button><button id="autopilotOne">Start Autopilot — This Clip Only</button><button id="autopilotStop" disabled>Stop Autopilot</button></div>
+        <div class="row"><label><input id="autoFindOnLoad" type="checkbox"> Auto-find clips when a video loads</label><button id="autoFindNow">Find Clips From This Video Now</button><button id="autoFindTestAudio">Test My Audio (10 seconds)</button><button id="autoFindLoudest">Find Loudest Clips (singing/music, no captions)</button></div>
+        <div class="row"><label>Skip first <input id="autoFindSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes (use this to skip a singing intro you do not want)</label><label><input id="autoFindFast" type="checkbox"> Fast mode: tiny models only, skip larger models</label></div>
+        <div class="row"><label>Find up to <input id="autoFindCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label><input id="autoFindCaptions" type="checkbox" checked> Add captions to found clips</label></div>
+        <p>Workflow: 1. Upload the video. 2. Auto-find looks for clips about 2 minutes long with the most activity in them — most talking, loudest, most continuous speech, not quiet or empty parts. 3. It clips those scenes and tracks the person. 4. Captions are added only if the box above is checked. 5. When you come back, tick the clips you want and press Save Picked Clips, or Save Picked Without Captions.</p>
+        <div id="autopilotStatus" class="captionStatus" aria-live="polite">Autopilot is off. Add at least one clip, then press Start.</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Auto Clipper — transcript suggestions</h3>
+        <p>Import a source-timed SRT or WebVTT transcript, then group its real caption cues around a target duration. This local heuristic keeps cue boundaries; it does not rank sermon meaning.</p>
+        <div class="row"><label>Transcript file <input id="transcriptInput" type="file" accept=".srt,.vtt,.txt,text/vtt,application/x-subrip"></label></div>
+        <div id="transcriptStatus" class="captionStatus" aria-live="polite">No source transcript loaded yet. Use Find Clips From This Video in Autopilot to transcribe with local Whisper, or import an SRT/WebVTT transcript.</div>
+        <div class="row"><label>Target seconds <input id="targetDuration" type="number" min="5" max="300" value="60" style="width:82px"></label><label>Minimum <input id="minDuration" type="number" min="5" max="300" value="20" style="width:72px"></label><label>Maximum <input id="maxDuration" type="number" min="5" max="300" value="90" style="width:72px"></label></div>
+        <div class="row"><label><input id="autoCaptions" type="checkbox" checked> Use imported transcript as captions</label><label><input id="prepareVertical" type="checkbox" checked> Prepare vertical 9:16</label><label><input id="avoidDuplicates" type="checkbox" checked> Avoid duplicate moments</label></div>
+        <div class="row"><button id="generateSuggestions">Generate Suggested Clips</button></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Size</h3>
+        <div class="row">
+          <select id="preset">
+            <option value="1080x1920">9:16 Vertical (1080×1920) — Reels / TikTok</option>
+            <option value="1920x1080">16:9 Landscape (1920×1080)</option>
+            <option value="1080x1728">5:8 Portrait (1080×1728)</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Width <input type="number" id="outW" value="1080" min="16" max="1920"></label>
+          <label>Height <input type="number" id="outH" value="1920" min="16" max="1920"></label>
+        </div>
+        <div class="row">
+          <label>Export size
+            <select id="exportSize">
+              <option value="full">Full (as above — best quality, slower)</option>
+              <option value="half">Half (540×960 for vertical — faster, still good for Reels)</option>
+            </select>
+          </label>
+        </div>
+        <p>Aspect presets match the desktop app. 5:8 is 1080×1728, not 1080×1350 (that is 4:5).</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Follow a person</h3>
+        <p class="warn">Numbered boxes show person detections on the current frame. Numbers are ordered from left to right and may change as you scrub.</p>
+        <div id="selInfo" class="warn">No person selected. Click a numbered box or Person button under the video.</div>
+        <div class="row"><button id="clearSel">Change person</button></div>
+        <div class="row">
+          <button id="addKey">Add Keyframe (fix crop here)</button>
+          <button id="clearKeys">Clear Keyframes</button>
+        </div>
+        <div class="row">
+          <button id="autoTrack" title="Retry automatic tracking for the open clip">Retry Tracking for Clip</button>
+          <button id="stopTrack">Stop Tracking</button>
+        </div>
+        <div class="row"><label for="trackingSmoothness">Crop smoothness <input id="trackingSmoothness" type="range" min="0" max="100" value="55"></label><span id="trackingSmoothnessValue">55%</span></div>
+        <p>Tracking checks every 0.5 seconds and follows the detected person whose centre is nearest to the last position, within 45% of the video width. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
+        <p>Privacy and downloads: your video stays in this tab. First use downloads TensorFlow.js and COCO-SSD from jsDelivr; only video frames being analyzed are used locally. The page has no analytics or upload feature. TensorFlow.js and the COCO-SSD model are Apache-2.0.</p>
+        <progress id="trackProgress" value="0" max="100"></progress>
+        <div id="trackStatus" aria-live="polite">Tracking has not run for this clip.</div>
+        <div id="keyList"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Captions</h3>
+        <p>Write and time captions for this clip. Click a caption to preview it at its start.</p>
+        <p class="warn">Caption edits stay in this project until you download an updated file with Save Project.</p>
+        <div class="captionControls"><button id="generateCaptions" title="Transcribe this clip's audio in this browser tab with local Whisper. First time only it downloads the model (about 75 MB, internet needed once). No audio is uploaded.">Generate Captions</button><button id="addCaption">+ Add Caption</button></div>
+        <div class="captionControls"><button id="splitCaption">Split at Playhead</button><button id="mergeCaption">Merge With Next</button><button id="deleteCaption">Delete Caption</button></div>
+        <div class="captionControls"><button id="undoCaption" disabled>Undo Caption Edit</button><button id="redoCaption" disabled>Redo Caption Edit</button></div>
+        <div id="captionStatus" class="captionStatus" aria-live="polite">Manual captions are ready. Select a clip to begin.</div>
+        <div id="captionList" class="captionList" aria-label="Captions in chronological order"></div>
+        <label>Caption text<textarea id="captionText" rows="3" style="width:100%;margin:5px 0" placeholder="Type the words spoken…"></textarea></label>
+        <div class="captionControls"><label>Start <input id="captionStart" type="number" min="0" step="0.1" style="width:100px"></label><label>End <input id="captionEnd" type="number" min="0" step="0.1" style="width:100px"></label><label>Speaker <input id="captionSpeaker" type="text" placeholder="Optional" style="width:120px"></label><label><input id="captionReviewed" type="checkbox"> Reviewed</label></div>
+        <div class="captionControls"><button id="saveCaption">Save Caption</button><button id="previewCaption">Preview Caption</button></div>
+        <details><summary>Caption style</summary>
+          <div class="captionControls"><label>Preset <select id="captionPreset"><option>House of Mercy Classic</option><option>House of Mercy Purple</option><option>House of Mercy Gold</option><option>Clean White</option><option>High Contrast</option><option>Custom</option></select></label>
+          <label>Font <select id="captionFont"><option>Arial</option><option>Aptos Display</option><option>Segoe UI</option><option>Tahoma</option><option>Verdana</option><option>Trebuchet MS</option></select></label>
+          <label>Size <select id="captionSize"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option><option value="xlarge">Extra Large</option></select></label></div>
+          <div class="captionControls"><label>Brand text color <select id="captionBrandColor"><option value="#FFFFFF">White</option><option value="#4B0082">Deep Purple</option><option value="#6A1B9A">Purple</option><option value="#FFC107">Gold</option><option value="#F39C12">Orange Gold</option><option value="#FF8F00">Deep Orange</option><option value="#FFD54F">Light Gold</option></select></label><label>Custom text <input id="captionColor" type="color" value="#FFFFFF"></label><label>Highlight <input id="captionHighlight" type="color" value="#FFC107"></label><label>Outline <input id="captionOutline" type="color" value="#24152D"></label><label>Background <input id="captionBackground" type="color" value="#1B1024"></label></div>
+        <div class="captionControls"><label>Weight <select id="captionWeight"><option value="600">Semi-bold</option><option value="700" selected>Bold</option><option value="800">Extra bold</option></select></label><label>Align <select id="captionAlign"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label><label>Max lines <select id="captionMaxLines"><option>1</option><option selected>2</option><option>3</option></select></label><label>Line spacing <input id="captionLineSpacing" type="range" min="100" max="150" value="112"></label><label>Background padding <input id="captionPadding" type="range" min="0" max="6" value="2.5" step="0.5"></label></div>
+        <div class="captionControls"><label>Outline width <input id="captionOutlineWidth" type="number" value="3" min="0" max="12" step="1" style="width:65px"></label><label>Background opacity <input id="captionOpacity" type="range" min="0" max="90" value="35"></label><label>Position <input id="captionPosition" type="range" min="45" max="88" value="72"></label><label><input id="captionBgOn" type="checkbox" checked> Dark background</label><label><input id="captionRounded" type="checkbox" checked> Rounded background</label><label><input id="captionWordHighlight" type="checkbox"> Word highlighting</label></div>
+          <div class="captionControls"><button id="applyCaptionStyle">Apply Style</button><button id="applyCaptionStyleAll">Apply to All Captions</button><button id="restoreCaptionStyle">Restore Default Style</button><button id="saveCaptionPreset">Save Custom Preset</button></div>
+          <div id="fontStatus" class="captionStatus" aria-live="polite"></div>
+        </details>
+        <div class="captionControls"><button id="exportSrt">Export SRT</button><button id="exportVtt">Export WebVTT</button><button id="exportWithCaptions">Export With Captions</button><button id="exportWithoutCaptions">Export Without Captions</button></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Export</h3>
+        <div class="row">
+          <button id="exportSel" title="Export the selected clip with burned-in captions">Export Selected Clip (With Captions)</button>
+          <button id="exportAll">Export All Approved</button>
+          <button id="cancelExp">Cancel Export</button>
+        </div>
+        <progress id="progress" value="0" max="100"></progress>
+        <div id="exportInfo">Exported files download to your Downloads folder. The browser chooses MP4 or WebM when supported; audio capture depends on the browser. Export runs in real time, and this tab must stay in front.</div>
+        <div id="downloadArea"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="appStatus"><div id="log">Ready. Open a video to begin.</div></div>
+</div>
+<dialog id="unsavedDialog">
+  <h3>Unsaved clip changes</h3><p id="unsavedMessage">You have changes to this clip.</p>
+  <div class="dialogActions"><button id="unsavedKeep">Keep Editing</button><button id="unsavedDiscard">Discard Changes</button><button id="unsavedSave">Save Changes</button></div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const video = $('video'), stage = $('stage'), cropBox = $('cropBox'), outCanvas = $('outCanvas'), octx = outCanvas.getContext('2d');
+let clips = [], sel = -1, manualCenter = null, sourceName = '', sourceIdentity='';
+let sourceTranscript=[],transcriptSourceName='',transcriptFileName='';
+let trackStop = false, exportStop = false;
+let cocoModel = null, cocoLoadPromise = null, candidates = [], selectedPerson = null, detectedAt = null;
+let selectedAnchor = null, selectedPersonNumber = null, detectionTimer = null, detectRequest = 0;
+let trackBusy = false;
+let trackingQueue=[],trackingQueueRunning=false,trackingVideo=null,trackingVideoUrl='',retiredTrackingUrls=[],sourceTrackingCache=new Map(),trackingTargetId='';
+let clipReviewSession=null;
+let drag = null, cropWasDragged = false;
+let editRange={start:null,end:null}, savedRange=null, activeMarker='start', markerDrag=null;
+let timelinePointerStart=null,timelinePointerIsTap=true;
+let previewingClip=false, pendingUnsavedResolver=null;
+let selectedCaptionId=null, captionPreviewUntil=0,captionInputUndoStarted=false;
+let captionProjectDirty=false;
+const defaultCaptionStyle={font:'Arial',size:'medium',weight:700,align:'center',maxLines:2,lineSpacing:1.12,padding:2.5,rounded:true,color:'#FFFFFF',highlight:'#FFC107',outline:'#24152D',outlineWidth:3,background:'#1B1024',opacity:35,position:72,bgOn:true,wordHighlight:false};
+let captionStyle={...defaultCaptionStyle},captionStyleDraft={...defaultCaptionStyle},captionUndo=[],captionRedo=[],customCaptionPresets={};
+let captionTrackView={start:0,end:0};
+const MIN_RANGE_SECONDS=0.1;
+
+function log(m){ $('log').textContent += '\n' + m; $('log').scrollTop = $('log').scrollHeight; }
+function fmt(s){ s = Math.max(0, s||0); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(Math.floor(s%60)).padStart(2,'0'); }
+function fmtFull(s){ return fmt(s) + '.' + String(Math.floor((s%1)*1000)).padStart(3,'0'); }
+function curClip(){ return (sel >= 0 && sel < clips.length) ? clips[sel] : null; }
+function outSize(){ return { w: parseInt($('outW').value)||1080, h: parseInt($('outH').value)||1920 }; }
+function rangeIsValid(range=editRange){return Number.isFinite(range.start)&&Number.isFinite(range.end)&&range.start>=0&&range.end>range.start&&range.end<=(video.duration||Infinity);}
+function rangeIsDirty(){
+  const c=curClip();
+  if(c)return editRange.start!==c.start||editRange.end!==c.end||$('clipName').value.trim()!==c.name||parseInt($('outW').value)!==c.outW||parseInt($('outH').value)!==c.outH;
+  return editRange.start!=null||editRange.end!=null||$('clipName').value.trim()!==''&&$('clipName').value.trim()!=='New clip';
+}
+function updateRangeUI(){
+  const duration=video.duration||0,valid=rangeIsValid(),startSet=Number.isFinite(editRange.start),endSet=Number.isFinite(editRange.end);
+  const pct=t=>duration?Math.max(0,Math.min(100,t/duration*100)):0;
+  $('startIn').value=startSet?String(editRange.start):'';$('endIn').value=endSet?String(editRange.end):'';
+  $('startMarker').hidden=!startSet;$('endMarker').hidden=!endSet;
+  $('startMarker').className='rangeMarker'+(activeMarker==='start'?' activeMarker':'');$('endMarker').className='rangeMarker'+(activeMarker==='end'?' activeMarker':'');
+  if(startSet){$('startMarker').style.left=pct(editRange.start)+'%';$('startMarker').setAttribute('aria-label','START at '+fmtFull(editRange.start));}
+  if(endSet){$('endMarker').style.left=pct(editRange.end)+'%';$('endMarker').setAttribute('aria-label','END at '+fmtFull(editRange.end));}
+  const startP=startSet?pct(editRange.start):0,endP=endSet?pct(editRange.end):100;
+  $('outsideBefore').style.width=startSet?startP+'%':'0%';$('outsideAfter').style.width=endSet?(100-endP)+'%':(startSet?'0%':'100%');
+  $('rangeHighlight').style.left=startSet?startP+'%':'0%';$('rangeHighlight').style.width=valid?(endP-startP)+'%':'0%';
+  $('startReadout').textContent='START '+(startSet?fmtFull(editRange.start):'—');
+  $('endReadout').textContent='END '+(endSet?fmtFull(editRange.end):'—');
+  $('lengthReadout').textContent='SELECTED LENGTH '+(valid?fmtFull(editRange.end-editRange.start):'—');
+  $('currentTimeReadout').textContent='PLAYHEAD '+fmtFull(video.currentTime||0);
+  const track=$('captionTrack'),trackHead=track.children[track.children.length-1];if(trackHead&&trackHead.className==='captionTrackPlayhead')trackHead.style.left=((video.currentTime-captionTrackView.start)/Math.max(.1,captionTrackView.end-captionTrackView.start)*100)+'%';
+  $('rangeInstruction').textContent=!startSet?'Move the playhead to the beginning, then set START.':!endSet?'Move to the ending, then set END.':valid?'Your clip is selected. Review it, adjust the markers, then add it to your clips.':'Move the markers to select a valid clip range.';
+  $('setStart').disabled=!duration;$('setEnd').disabled=!duration;
+  $('playClip').disabled=!valid;$('addClip').hidden=sel>=0||!valid;
+  const dirty=rangeIsDirty();$('saveChanges').hidden=sel<0||!dirty;$('cancelChanges').hidden=sel<0||!dirty;
+  $('clipModeLabel').textContent=curClip()?'Editing saved clip: '+curClip().name:'Creating a new clip';
+  $('playhead').style.left=(duration?Math.max(0,Math.min(100,video.currentTime/duration*100)):0)+'%';
+}
+function setRangeBoundary(which,time){
+  const duration=video.duration||0;if(!duration)return;
+  const gap=Math.min(MIN_RANGE_SECONDS,duration/2),t=Math.max(0,Math.min(duration,Number(time)||0));
+  if(which==='start'){
+    const max=editRange.end==null?duration-gap:Math.max(0,editRange.end-gap);
+    editRange.start=Math.min(t,max);
+  }else{
+    const min=editRange.start==null?gap:Math.min(duration,editRange.start+gap);
+    editRange.end=Math.max(min,t);
+  }
+  activeMarker=which;updateRangeUI();
+}
+function markerTimeFromPointer(clientX){const r=$('timelineWrap').getBoundingClientRect();return Math.max(0,Math.min(video.duration||0,(clientX-r.left)/Math.max(1,r.width)*(video.duration||0)));}
+function videoContentRect(){
+  const r=video.getBoundingClientRect();
+  if(!video.videoWidth || !video.videoHeight) return r;
+  const scale=Math.min(r.width/video.videoWidth,r.height/video.videoHeight);
+  const width=video.videoWidth*scale,height=video.videoHeight*scale;
+  return {left:r.left+(r.width-width)/2,top:r.top+(r.height-height)/2,width,height};
+}
+
+// --- Crop maths (same as desktop) ---
+function computeCrop(sw, sh, ow, oh, cx, cy){
+  const target = ow/oh, source = sw/sh;
+  cx = (cx==null? sw/2 : cx); cy = (cy==null? sh/2 : cy);
+  if (target <= source){
+    // Keep the requested ratio exact; canvas accepts fractional crop dimensions.
+    let cw = sh*target, ch = sh;
+    let x = Math.round(Math.max(0, Math.min(sw-cw, cx-cw/2)));
+    return {x:x, y:0, w:cw, h:ch, fill:false};
+  }
+  // Wider than source: keep whole frame, fill sides (blurred in preview/export)
+  return {x:0, y:0, w:sw, h:sh, fill:true};
+}
+function nearestPerson(persons,last,maxDistance){
+  let best=null,bestD=Infinity;
+  for(const p of persons){const d=Math.hypot(p.cx-last.cx,p.cy-last.cy);if(d<bestD){bestD=d;best=p;}}
+  return best && bestD < maxDistance ? best : null;
+}
+function sortPeopleLeftToRight(people){return people.slice().sort((a,b)=>(a.x+a.w/2)-(b.x+b.w/2));}
+function interp(points, t){
+  if(!points || !points.length) return null;
+  const p = points.slice().sort((a,b)=>a.t-b.t);
+  if(t <= p[0].t) return p[0];
+  if(t >= p[p.length-1].t) return p[p.length-1];
+  for(let i=0;i<p.length-1;i++){
+    const a=p[i], b=p[i+1];
+    if(a.t<=t && t<=b.t){ const f=(t-a.t)/Math.max(0.001,(b.t-a.t)); return {t:t, cx:a.cx+(b.cx-a.cx)*f, cy:a.cy+(b.cy-a.cy)*f}; }
+  }
+  return p[p.length-1];
+}
+function smoothPoints(pts,alpha=.55){
+  if(!pts.length) return [];
+  alpha=Math.max(.12,Math.min(.85,.12+alpha*.73));
+  const s = pts.slice().sort((a,b)=>a.t-b.t); let out=[], sx=s[0].cx, sy=s[0].cy;
+  for(const p of s){
+    if(p.manual){ sx=p.cx; sy=p.cy; out.push(p); continue; }
+    if(p.lost){ out.push({t:p.t,cx:sx,cy:sy,lost:true}); continue; }
+    const speed=Math.hypot(p.cx-sx,p.cy-sy),frameWidth=typeof video!=='undefined'&&video.videoWidth?video.videoWidth:1920,motionBoost=Math.min(.2,speed/frameWidth*.8),a=speed<frameWidth*.004?0:Math.min(.9,alpha+motionBoost);
+    sx = a*p.cx + (1-a)*sx; sy = a*p.cy + (1-a)*sy;
+    out.push({t:p.t,cx:sx,cy:sy});
+  }
+  return out;
+}
+function cropCenterAt(clip, t){
+  // Manual keyframes win over auto-track near them, exactly like desktop.
+  const all = [];
+  if(clip && clip.track) all.push(...clip.track);
+  if(clip && clip.keys) all.push(...clip.keys.filter(k => true));
+  // Merge: drop auto points within 0.25s of a manual keyframe
+  let merged = all;
+  if(clip && clip.keys && clip.keys.length){
+    merged = (clip.track||[]).filter(p => !clip.keys.some(k => Math.abs(p.t-k.t)<=0.25));
+    merged = merged.concat(clip.keys);
+  }
+  const alpha=clip&&Number.isFinite(clip.smoothness)?clip.smoothness/100:Number($('trackingSmoothness')?.value||55)/100;
+  const smoothed = smoothPoints(merged,alpha);
+  const pt = interp(smoothed, t);
+  if(pt) return {cx:pt.cx, cy:pt.cy};
+  if(manualCenter) return manualCenter;
+  return null;
+}
+function currentCrop(){
+  if(!video.videoWidth) return null;
+  const clip = curClip();
+  const c = cropWasDragged ? manualCenter : cropCenterAt(clip, video.currentTime);
+  const os = outSize();
+  return computeCrop(video.videoWidth, video.videoHeight, os.w, os.h, c?c.cx:null, c?c.cy:null);
+}
+
+// --- Preview ---
+function drawPreview(){
+  renderCandidates();
+  if(!video.videoWidth || video.readyState < 2) return;
+  const crop = currentCrop(); if(!crop) return;
+  // Position gold box over displayed video (object-fit: contain)
+  const sr = stage.getBoundingClientRect(), vr = videoContentRect();
+  const scaleX = vr.width / video.videoWidth, scaleY = vr.height / video.videoHeight;
+  const left = (vr.left - sr.left) + crop.x*scaleX, top = (vr.top - sr.top) + crop.y*scaleY;
+  cropBox.style.display = 'block';
+  cropBox.style.left = left+'px'; cropBox.style.top = top+'px';
+  cropBox.style.width = Math.max(10, crop.w*scaleX)+'px'; cropBox.style.height = Math.max(10, crop.h*scaleY)+'px';
+  // Output preview canvas
+  const os = outSize();
+  const dispH = 320, dispW = Math.round(dispH * os.w/os.h);
+  outCanvas.width = dispW; outCanvas.height = dispH;
+  if(crop.fill){
+    // Blurred background fill (honest: we are not inventing side footage)
+    octx.save(); octx.filter = 'blur(18px) brightness(0.8)';
+    const bs = Math.max(dispW/crop.w, dispH/crop.h);
+    const bw = crop.w*bs, bh = crop.h*bs;
+    octx.drawImage(video, (dispW-bw)/2, (dispH-bh)/2, bw, bh); octx.restore();
+    const fs = Math.min(dispW/crop.w, dispH/crop.h);
+    const fw = crop.w*fs, fh = crop.h*fs;
+    octx.drawImage(video, (dispW-fw)/2, (dispH-fh)/2, fw, fh);
+  } else {
+    octx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, dispW, dispH);
+  }
+  const previewClip=curClip();if(previewClip)drawCaptionText(octx,dispW,dispH,previewClip,video.currentTime);
+  $('cropInfo').textContent = 'Crop ' + crop.w + '×' + crop.h + ' at (' + crop.x + ', ' + crop.y + ') → ' + os.w + '×' + os.h + (crop.fill ? ' — blurred fill (target wider than source)' : '');
+}
+function seekTo(t){
+  return new Promise(res => {
+    const on = () => { video.removeEventListener('seeked', on); res(); };
+    video.addEventListener('seeked', on);
+    video.currentTime = Math.max(0, Math.min(video.duration||0, t));
+    setTimeout(res, 1500); // safety: never hang forever on a seek
+  });
+}
+
+// Drag crop box
+cropBox.addEventListener('pointerdown', e => {
+  const r = cropBox.getBoundingClientRect(), vr = videoContentRect();
+  drag = {offsetX:e.clientX-(r.left+r.width/2), offsetY:e.clientY-(r.top+r.height/2), vr:vr};
+  cropBox.setPointerCapture(e.pointerId);
+});
+cropBox.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const vr = drag.vr, scaleX = video.videoWidth/vr.width, scaleY = video.videoHeight/vr.height;
+  const px = (e.clientX-drag.offsetX-vr.left)*scaleX, py = (e.clientY-drag.offsetY-vr.top)*scaleY;
+  manualCenter = {cx: Math.max(0, Math.min(video.videoWidth, px)), cy: Math.max(0, Math.min(video.videoHeight, py))};
+  cropWasDragged = true;
+  drawPreview();
+});
+cropBox.addEventListener('pointerup', () => { drag = null; });
+stage.addEventListener('click', e => {
+  if(e.target === cropBox) return;
+  if(e.target && e.target.classList && e.target.classList.contains('personBox')) return;
+  if(e.target && e.target.parentElement && e.target.parentElement.classList && e.target.parentElement.classList.contains('personBox')) return;
+  const vr = videoContentRect();
+  const px = (e.clientX - vr.left) * video.videoWidth/vr.width;
+  const py = (e.clientY - vr.top) * video.videoHeight/vr.height;
+  if(px>=0 && py>=0 && px<=video.videoWidth && py<=video.videoHeight){ manualCenter = {cx:px, cy:py}; cropWasDragged=true; drawPreview(); }
+});
+
+// --- Load video ---
+$('fileInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; if(!f) return;
+  if(!await resolveUnsavedEdits()){e.target.value='';return;}
+  detectRequest++; clearTimeout(detectionTimer);
+  // A selection belongs to its original source frame; retaining it for a new file is unsafe.
+  candidates=[]; selectedPerson=null; selectedAnchor=null; selectedPersonNumber=null; detectedAt=null; manualCenter=null; cropWasDragged=false;
+  $('selInfo').textContent='No person selected. Click a numbered box or Person button under the video.';
+  $('selInfo').className = 'warn'; renderCandidates();
+  $('autoTrack').textContent='Retry Tracking for Clip'; $('detectionInfo').textContent='Video is loading… people will be found automatically.';
+  sourceName = f.name;
+  sourceIdentity=f.name+'|'+f.size+'|'+f.lastModified;
+  trackStop=true;trackingQueue=[];trackingTargetId='';trackingVideo=null;if(trackingVideoUrl)retiredTrackingUrls.push(trackingVideoUrl);trackingVideoUrl=URL.createObjectURL(f);if(!trackingQueueRunning){retiredTrackingUrls.forEach(url=>URL.revokeObjectURL(url));retiredTrackingUrls=[];}
+  if(video.src) URL.revokeObjectURL(video.src);
+  video.src = URL.createObjectURL(f);
+  video.load();
+  log('Loaded: ' + f.name + ' (' + Math.round(f.size/1048576) + ' MB)');
+});
+video.addEventListener('loadedmetadata', () => {
+  const identityParts=sourceIdentity.split('|');sourceIdentity=identityParts.slice(0,3).join('|')+'|'+(Number(video.duration)||0).toFixed(3)+'|'+video.videoWidth+'x'+video.videoHeight;
+  $('info').textContent = sourceName + '  •  ' + video.videoWidth + '×' + video.videoHeight + '  •  ' + (video.duration? video.duration.toFixed(1)+'s' : '');
+  $('timeLabel').textContent=fmt(video.currentTime)+' / '+fmt(video.duration||0);
+  if(sel<0){editRange={start:null,end:null};savedRange=null;}
+  updateRangeUI();
+  drawPreview();
+  if($('autoFindOnLoad') && $('autoFindOnLoad').checked && autoFindLastSource!==sourceIdentity){
+    setTimeout(()=>{ if(!autoFindRunning && !autopilotRunning && $('autoFindOnLoad') && $('autoFindOnLoad').checked) autoFindClips(); }, 800);
+  }
+});
+video.addEventListener('loadeddata', () => requestPeopleDetection(0));
+video.addEventListener('timeupdate', () => {
+  $('timeLabel').textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration||0);
+  $('currentTimeReadout').textContent='PLAYHEAD '+fmtFull(video.currentTime||0);
+  if(captionPreviewUntil&&video.currentTime>=captionPreviewUntil){video.pause();video.currentTime=captionPreviewUntil;captionPreviewUntil=0;}
+  if(video.duration) $('slider').value = Math.round(video.currentTime/video.duration*1000);
+  $('playhead').style.left=(video.duration?Math.max(0,Math.min(100,video.currentTime/video.duration*100)):0)+'%';
+  if(clipReviewSession&&!video.paused){const session=clipReviewSession,c=clips.find(x=>x.id===session.clipId),delta=video.currentTime-session.lastTime;if(c&&delta>0&&delta<=1.5)session.played+=delta;session.lastTime=video.currentTime;if(c){const total=Math.max(.1,session.end-session.start);c.reviewPlaybackProgress=Math.min(100,Math.round(session.played/total*100));}
+    if(c&&video.currentTime>=session.end-.05&&session.played>=(session.end-session.start)*.9){c.reviewPlaybackComplete=true;c.reviewPlaybackProgress=100;captionProjectDirty=true;clipReviewSession=null;previewingClip=false;video.pause();video.currentTime=session.end;$('playClip').textContent='▶ Play Clip';$('clipReviewStatus').textContent=c.name+' has finished playing. Choose Mark Reviewed, then Approve Clip.';renderClips();log('Review playback completed for '+c.name+'.');}
+  }
+  if(previewingClip&&rangeIsValid()&&video.currentTime>=editRange.end){
+    if($('loopClip').checked){video.currentTime=editRange.start;}
+    else{video.pause();video.currentTime=editRange.end;previewingClip=false;$('playClip').textContent='▶ Play Clip';}
+  }
+  drawPreview();
+});
+video.addEventListener('seeked', () => { if(clipReviewSession&&!clipReviewSession.completed){const c=clips.find(x=>x.id===clipReviewSession.clipId);clipReviewSession=null;if(c){c.reviewPlaybackProgress=0;$('clipReviewStatus').textContent='Review playback was interrupted. Choose Review Clip to start again.';renderClips();}}cropWasDragged=false;drawPreview(); });
+$('playBtn').addEventListener('click', () => {
+  previewingClip=false;captionPreviewUntil=0;$('playClip').textContent='▶ Play Clip';
+  if(video.paused){video.play();$('playBtn').textContent='⏸ Pause Video';}
+  else{video.pause();$('playBtn').textContent='▶ Play Video';}
+});
+$('playClip').addEventListener('click',async()=>{
+  if(!rangeIsValid())return;
+  captionPreviewUntil=0;previewingClip=true;$('playClip').textContent='⏸ Pause Clip';
+  if(video.currentTime<editRange.start||video.currentTime>=editRange.end)await seekTo(editRange.start);
+  video.play();$('playBtn').textContent='▶ Play Video';
+});
+$('toggleOutput').addEventListener('click',()=>{
+  const showing=$('outputPreview').style.display!=='none';
+  $('outputPreview').style.display=showing?'none':'block';$('stage').style.display=showing?'block':'none';
+  $('toggleOutput').textContent=showing?'Show vertical preview':'Show source video';$('toggleOutput').setAttribute('aria-pressed',String(!showing));drawPreview();
+});
+$('slider').addEventListener('input', e => {
+  if(video.duration){previewingClip=false;$('playClip').textContent='▶ Play Clip';video.pause();$('playBtn').textContent='▶ Play Video';video.currentTime=e.target.value/1000*video.duration;requestPeopleDetection(350);}
+});
+$('slider').addEventListener('pointerup',e=>{if(e.altKey)setRangeBoundary('start',video.currentTime);else if(e.shiftKey)setRangeBoundary('end',video.currentTime);});
+$('timelineWrap').addEventListener('pointerdown',e=>{timelinePointerStart=e.clientX;timelinePointerIsTap=true;});
+$('timelineWrap').addEventListener('pointerup',e=>{if(timelinePointerStart!=null)timelinePointerIsTap=Math.abs(e.clientX-timelinePointerStart)<5;timelinePointerStart=null;});
+$('timelineWrap').addEventListener('click',e=>{
+  if(e.target=== $('startMarker')||e.target=== $('endMarker'))return;
+  if(e.target===$('slider')&&e.detail&& !timelinePointerIsTap)return;
+  const t=markerTimeFromPointer(e.clientX);video.currentTime=t;
+  if(e.altKey)setRangeBoundary('start',t);else if(e.shiftKey)setRangeBoundary('end',t);else setRangeBoundary(activeMarker,t);
+  timelinePointerIsTap=true;
+});
+for(const [id,which] of [['startMarker','start'],['endMarker','end']]){
+  const marker=$(id);
+  marker.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();activeMarker=which;markerDrag=which;updateRangeUI();marker.setPointerCapture(e.pointerId);});
+  marker.addEventListener('pointermove',e=>{if(markerDrag===which)setRangeBoundary(which,markerTimeFromPointer(e.clientX));});
+  marker.addEventListener('pointerup',()=>{markerDrag=null;});
+  marker.addEventListener('click',e=>{e.stopPropagation();activeMarker=which;});
+  marker.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();const step=e.shiftKey?1:0.1;setRangeBoundary(which,(editRange[which]||video.currentTime)+(e.key==='ArrowRight'?step:-step));});
+}
+$('preset').addEventListener('change', e => {
+  if(e.target.value !== 'custom'){ const [w,h] = e.target.value.split('x'); $('outW').value = w; $('outH').value = h; }
+  drawPreview();
+});
+$('trackingSmoothness').addEventListener('input',e=>{$('trackingSmoothnessValue').textContent=e.target.value+'%';for(const c of clips)if(c.smoothness==null)markClipEdited(c);captionProjectDirty=true;drawPreview();renderClips();});
+$('outW').addEventListener('change', drawPreview); $('outH').addEventListener('change', drawPreview);
+$('setStart').addEventListener('click',()=>setRangeBoundary('start',video.currentTime));
+$('setEnd').addEventListener('click',()=>setRangeBoundary('end',video.currentTime));
+$('clipName').addEventListener('input',updateRangeUI);
+$('newClip').addEventListener('click',async()=>{if(!await resolveUnsavedEdits())return;resetToNewClip();renderClips();});
+$('addClip').addEventListener('click',()=>createClipFromRange());
+$('saveChanges').addEventListener('click',()=>saveCurrentClipChanges());
+$('cancelChanges').addEventListener('click',()=>discardCurrentChanges());
+$('unsavedSave').addEventListener('click',()=>{
+  const saved=curClip()?saveCurrentClipChanges():createClipFromRange();if(!saved)return;
+  $('unsavedDialog').close();if(pendingUnsavedResolver){pendingUnsavedResolver(true);pendingUnsavedResolver=null;}
+});
+$('unsavedDiscard').addEventListener('click',()=>{discardCurrentChanges();$('unsavedDialog').close();if(pendingUnsavedResolver){pendingUnsavedResolver(true);pendingUnsavedResolver=null;}});
+$('unsavedKeep').addEventListener('click',()=>{$('unsavedDialog').close();if(pendingUnsavedResolver){pendingUnsavedResolver(false);pendingUnsavedResolver=null;}});
+$('selectAllClips').addEventListener('click',()=>{clips.forEach(c=>c.batchSelected=true);renderClips();});
+$('deselectAllClips').addEventListener('click',()=>{clips.forEach(c=>c.batchSelected=false);renderClips();});
+for(const id of ['clipSearch','clipSort','clipFilter','approvalFilter','exportFilter'])$(id).addEventListener(id==='clipSearch'?'input':'change',renderClips);
+
+// --- Clips ---
+function newClipId(){return (globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():'clip-'+Date.now()+'-'+Math.random().toString(16).slice(2);}
+function clipTrackingLabel(c){
+  let status=c.trackingStatus||((c.track||[]).length?'needs-review':'not-tracked');if(status==='ready'&&!c.trackingValidated)status='needs-review';
+  const names={'queued':'Tracking Queued','waiting-target':'Needs Tracking Review · Select a person','in-progress':'Tracking in Progress','ready':'Tracking Ready','needs-review':'Needs Tracking Review','failed':'Tracking Failed','not-tracked':'Not tracked'};
+  const lost=(c.track||[]).filter(p=>p.lost||p.lowConfidence).length;
+  return (names[status]||'Needs Tracking Review')+(status==='in-progress'?' · '+(c.trackingProgress||0)+'%':'')+(lost?' · '+lost+' uncertain sample(s)':'')+(c.trackingError?' · '+c.trackingError:'');
+}
+function markClipEdited(c){c.reviewed=false;c.reviewPlaybackComplete=false;c.reviewPlaybackProgress=0;if(clipReviewSession&&clipReviewSession.clipId===c.id)clipReviewSession=null;if(['approved','suggested','rejected'].includes(c.approvalState)){c.approvalState='needs-review';c.approvedAt=null;c.rejectedAt=null;}c.exportOutdated=!!(c.exportedAt||c.exportStatus==='exported'||c.exportOutdated);c.exportStatus='not-exported';c.exportError='';}
+function currentCaptions(){const c=curClip();if(!c)return [];if(!Array.isArray(c.captions))c.captions=[];return c.captions;}
+function captionStyleFor(cap,allowDraft=true){return {...captionStyle,...(cap&&cap.style||{}),...(allowDraft&&(selectedCaptionId==null||cap&&cap.id===selectedCaptionId)?captionStyleDraft:{})};}
+function recordCaptionUndo(){const c=curClip();if(!c)return;captionUndo.push(JSON.stringify(c.captions||[]));if(captionUndo.length>60)captionUndo.shift();captionRedo=[];updateCaptionUndoButtons();}
+function updateCaptionUndoButtons(){$('undoCaption').disabled=!captionUndo.length;$('redoCaption').disabled=!captionRedo.length;}
+function restoreCaptionSnapshot(target,source){const c=curClip();if(!c)return;source.push(JSON.stringify(c.captions||[]));c.captions=JSON.parse(target.pop()||'[]');selectedCaptionId=null;updateCaptionEditor();markClipEdited(c);drawPreview();updateCaptionUndoButtons();}
+function fmtSrtTime(seconds,separator=','){
+  const ms=Math.max(0,Math.round(seconds*1000)),h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000),r=ms%1000;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+separator+String(r).padStart(3,'0');
+}
+function captionsInClip(c){return (c.captions||[]).filter(cap=>String(cap.text||'').trim()&&cap.end>c.start&&cap.start<c.end).sort((a,b)=>a.start-b.start);}
+function makeSubtitleText(c,format='srt'){
+  const list=captionsInClip(c),sep=format==='vtt'?'.':',';
+  const head=format==='vtt'?'WEBVTT\n\n':'';
+  return head+list.map((cap,i)=>{
+    const start=Math.max(c.start,cap.start)-c.start,end=Math.min(c.end,cap.end)-c.start;
+    const text=(cap.speaker?cap.speaker+': ':'')+(cap.text||'');
+    return (format==='vtt'?'':(i+1)+'\n')+fmtSrtTime(start,sep)+' --> '+fmtSrtTime(end,sep)+'\n'+text;
+  }).join('\n\n');
+}
+function parseSubtitleTimestamp(value){const m=String(value).trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{3})$/);return m?Number(m[1]||0)*3600+Number(m[2])*60+Number(m[3])+Number(m[4])/1000:NaN;}
+function parseSubtitleText(text){
+  const clean=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'').trim(),blocks=clean.split(/\n\s*\n/),cues=[];let n=0;
+  for(const block of blocks){const lines=block.split('\n'),i=lines.findIndex(line=>line.includes('-->'));if(i<0)continue;
+    const m=lines[i].match(/((?:\d+:)?\d{1,2}:\d{2}[.,]\d{3})\s*-->\s*((?:\d+:)?\d{1,2}:\d{2}[.,]\d{3})/);if(!m)continue;
+    const start=parseSubtitleTimestamp(m[1]),end=parseSubtitleTimestamp(m[2]),caption=lines.slice(i+1).join(' ').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+    if(Number.isFinite(start)&&Number.isFinite(end)&&start>=0&&end>start&&caption)cues.push({id:'transcript-'+(++n),start,end,text:caption});
+  }
+  return cues.sort((a,b)=>a.start-b.start);
+}
+function buildTranscriptCandidates(input,{target=60,min=20,max=90,sourceDuration=Infinity}={}){
+  const cues=(input||[]).filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.start>=0&&c.end>c.start&&c.start<sourceDuration).map(c=>({...c,end:Math.min(c.end,sourceDuration)})).filter(c=>c.end>c.start).sort((a,b)=>a.start-b.start);
+  if(!(min>0&&target>=min&&max>=target))throw new Error('Set durations so Minimum ≤ Target ≤ Maximum.');
+  const out=[];let i=0;
+  while(i<cues.length){let best=null,bestCost=Infinity;
+    for(let j=i;j<cues.length;j++){
+      const duration=cues[j].end-cues[i].start;if(duration>max)break;if(duration<min)continue;
+      const punct=/[.!?]["')\]]?$/.test(cues[j].text.trim()),gap=j+1<cues.length?cues[j+1].start-cues[j].end:Infinity;
+      const natural=punct||gap>=.65,cost=Math.abs(duration-target)-(natural?Math.min(4,target*.06):0);
+      if(cost<bestCost){bestCost=cost;best={start:cues[i].start,end:cues[j].end,cues:cues.slice(i,j+1)};}
+    }
+    if(!best){i++;continue;}out.push(best);i+=best.cues.length;
+  }
+  return out;
+}
+function approvalLabel(c){return c.approvalState==='approved'?'Approved':c.approvalState==='rejected'?'Rejected':c.approvalState==='suggested'?'Suggested':c.reviewed?'Reviewed · Awaiting Approval':'Needs Review';}
+function isApprovedClip(c){return !!c&&c.approvalState==='approved';}
+function trackingExportReady(c){if(!c)return false;if(c.trackingValidated&&Array.isArray(c.track)&&c.track.length>=2)return true;const keys=(c.keys||[]).slice().sort((a,b)=>a.t-b.t);return keys.length>=2&&keys[0].t<=c.start+.5&&keys[keys.length-1].t>=c.end-.5;}
+function approveClip(c){if(!c)return false;if(!c.reviewed){alert('Preview the complete clip and mark it Reviewed before approving it for export.');return false;}c.approvalState='approved';c.approvedAt=new Date().toISOString();c.rejectedAt=null;captionProjectDirty=true;renderClips();log('Approved '+c.name+' for export.');return true;}
+function rejectClip(c){if(!c)return;c.approvalState='rejected';c.approvedAt=null;c.rejectedAt=new Date().toISOString();c.batchSelected=false;captionProjectDirty=true;renderClips();log('Rejected '+c.name+'. It will not be included in approved exports.');}
+function markClipReviewed(c){if(!c)return false;if(!c.reviewPlaybackComplete){alert('Choose Review Clip and watch the full clip before marking it reviewed.');return false;}c.reviewed=true;captionProjectDirty=true;renderClips();log('Marked '+c.name+' reviewed. You can now approve it.');return true;}
+async function startClipReview(c){
+  if(!c||activeExportIds.size)return;
+  if(!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity){alert('Load the matching source video before reviewing this clip.');return;}
+  if(c.start<0||c.end<=c.start||c.end>video.duration){alert('This clip range does not fit the loaded video. Open the matching source before reviewing it.');return;}
+  if(!await resolveUnsavedEdits())return;
+  clipReviewSession=null;previewingClip=false;video.pause();loadClipToUI(c,false);renderClips();await seekTo(c.start);
+  clipReviewSession={clipId:c.id,start:c.start,end:c.end,lastTime:video.currentTime,played:0};c.reviewPlaybackComplete=false;c.reviewPlaybackProgress=0;
+  previewingClip=true;$('playClip').textContent='⏸ Pause Clip';$('clipReviewStatus').textContent='Reviewing '+c.name+' · 0%. Watch the whole clip to enable Mark Reviewed.';
+  try{await video.play();$('playBtn').textContent='▶ Play Video';renderClips();}catch(err){clipReviewSession=null;previewingClip=false;$('clipReviewStatus').textContent='Could not play this clip: '+(err.message||err);}
+}
+function clipExportLabel(c){if(c.exportOutdated)return 'Outdated export';return c.exportStatus==='exported'?'Exported':c.exportStatus==='failed'?'Export failed':c.exportStatus==='processing'?'Exporting':c.exportStatus==='pending'?'Waiting to export':'Not exported';}
+function wrapCaptionLines(ctx,text,maxWidth,maxLines,font){
+  const words=String(text||'').split(/\s+/).filter(Boolean);let size=font,lines=[];
+  for(let attempt=0;attempt<8;attempt++){
+    ctx.font=size;lines=[];let line='';
+    for(const word of words){const test=line?line+' '+word:word;if(line&&ctx.measureText(test).width>maxWidth){lines.push(line);line=word;}else line=test;}
+    if(line)lines.push(line);if(lines.length<=maxLines)break;size=size.replace(/(\d+(?:\.\d+)?)px/,(_,n)=>(parseFloat(n)*0.88)+'px');
+  }
+  return {lines,size};
+}
+function drawCaptionText(ctx,width,height,c,time,allowDraft=true){
+  const cap=(c.captions||[]).find(x=>x.start<=time&&time<x.end&&String(x.text||'').trim());
+  if(!cap)return;
+  const style=captionStyleFor(cap,allowDraft),sizeRatio={small:.026,medium:.034,large:.043,xlarge:.052}[style.size]||.034;
+  const px=Math.max(18,height*sizeRatio),outline=Number(style.outlineWidth)||0,maxWidth=width*.9;
+  const font=`${Number(style.weight)||700} ${px}px "${style.font||'Arial'}", "Segoe UI", sans-serif`;
+  ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+  const wrapped=wrapCaptionLines(ctx,cap.text,maxWidth-40,Number(style.maxLines)||2,font);ctx.font=wrapped.size;
+  const lineHeight=parseFloat(wrapped.size.match(/([\d.]+)px/)[1])*(Number(style.lineSpacing)||1.12),totalHeight=lineHeight*wrapped.lines.length;
+  const centerY=height*Math.max(.45,Math.min(.88,(Number(style.position)||72)/100));
+  const longest=Math.max(0,...wrapped.lines.map(line=>ctx.measureText(line).width));
+  const padX=height*(Number(style.padding)||0)/100,padY=height*.012,boxW=Math.min(maxWidth,longest+padX*2),boxH=totalHeight+padY*2;
+  if(style.bgOn&&Number(style.opacity)>0){ctx.fillStyle=style.background;ctx.globalAlpha=Math.max(0,Math.min(.9,Number(style.opacity)/100));
+    const x=(width-boxW)/2,y=centerY-boxH/2,r=style.rounded?height*.012:0;ctx.beginPath();ctx.roundRect&&style.rounded?ctx.roundRect(x,y,boxW,boxH,r):ctx.rect(x,y,boxW,boxH);ctx.fill();ctx.globalAlpha=1;}
+  const wordTimes=Array.isArray(cap.words)?cap.words:null,canHighlight=style.wordHighlight&&wordTimes&&wordTimes.length;
+  const activeWord=canHighlight?wordTimes.find(w=>w.start<=time&&time<w.end):null;
+  const y0=centerY-totalHeight/2+lineHeight/2;
+  wrapped.lines.forEach((line,index)=>{
+    if(canHighlight){
+      const words=line.split(/\s+/),widths=words.map(word=>ctx.measureText(word).width),space=ctx.measureText(' ').width;
+      const lineWidth=widths.reduce((a,b)=>a+b,0)+space*Math.max(0,words.length-1);let x=style.align==='left'?width*.05:(style.align==='right'?width*.95-lineWidth:(width-lineWidth)/2);
+      const norm=s=>String(s).toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'');
+      words.forEach((word,i)=>{const timing=wordTimes.find(w=>norm(w.text)===norm(word)&&w.start<=time&&time<w.end);ctx.textAlign='left';ctx.lineWidth=outline;ctx.strokeStyle=style.outline;ctx.strokeText(word,x,y0+index*lineHeight);ctx.fillStyle=timing?style.highlight:style.color;ctx.fillText(word,x,y0+index*lineHeight);x+=widths[i]+space;});
+    }else{ctx.textAlign=style.align||'center';const x=style.align==='left'?width*.05:(style.align==='right'?width*.95:width/2);ctx.lineWidth=outline;ctx.strokeStyle=style.outline;ctx.strokeText(line,x,y0+index*lineHeight);ctx.fillStyle=style.color;ctx.fillText(line,x,y0+index*lineHeight);}
+  });
+  ctx.restore();
+  $('captionStatus').textContent=(cap.reviewed?'Reviewed · ':'Needs review · ')+fmtFull(cap.start)+'–'+fmtFull(cap.end)+(activeWord?' · timed word highlight':(style.wordHighlight?' · word highlighting needs real word timestamps; phrase stays unchanged':''));
+}
+function captionStyleFromControls(){return {font:$('captionFont').value,size:$('captionSize').value,weight:Number($('captionWeight').value),align:$('captionAlign').value,maxLines:Number($('captionMaxLines').value),lineSpacing:Number($('captionLineSpacing').value)/100,padding:Number($('captionPadding').value),rounded:$('captionRounded').checked,color:$('captionColor').value,highlight:$('captionHighlight').value,outline:$('captionOutline').value,outlineWidth:Number($('captionOutlineWidth').value)||0,background:$('captionBackground').value,opacity:Number($('captionOpacity').value),position:Number($('captionPosition').value),bgOn:$('captionBgOn').checked,wordHighlight:$('captionWordHighlight').checked};}
+function setCaptionStyleControls(style=captionStyle){
+  captionStyleDraft={...style};
+  $('captionFont').value=style.font;$('captionSize').value=style.size;$('captionWeight').value=style.weight;$('captionAlign').value=style.align;$('captionMaxLines').value=style.maxLines;$('captionLineSpacing').value=style.lineSpacing*100;$('captionPadding').value=style.padding;$('captionRounded').checked=style.rounded;$('captionColor').value=style.color;$('captionBrandColor').value=style.color;$('captionHighlight').value=style.highlight;$('captionOutline').value=style.outline;$('captionOutlineWidth').value=style.outlineWidth;$('captionBackground').value=style.background;$('captionOpacity').value=style.opacity;$('captionPosition').value=style.position;$('captionBgOn').checked=style.bgOn;$('captionWordHighlight').checked=style.wordHighlight;
+  if(document.fonts&&document.fonts.check){const ok=document.fonts.check(`700 20px "${style.font}"`);$('fontStatus').textContent=ok?style.font+' is available.':'This font is not confirmed on this computer; the browser will use its local sans-serif fallback.';}
+}
+function captionPresetStyle(name){
+  const presets={
+    'House of Mercy Classic':{...defaultCaptionStyle},
+    'House of Mercy Purple':{...defaultCaptionStyle,highlight:'#6A1B9A'},
+    'House of Mercy Gold':{...defaultCaptionStyle,highlight:'#F39C12'},
+    'Clean White':{...defaultCaptionStyle,bgOn:false},
+    'High Contrast':{...defaultCaptionStyle,background:'#000000',opacity:78,bgOn:true}
+  };
+  return presets[name]||{...defaultCaptionStyle};
+}
+function updateCaptionEditor(){
+  const c=curClip(),cap=currentCaptions().find(x=>x.id===selectedCaptionId);
+  $('captionList').innerHTML='';$('captionTrack').innerHTML='';
+  if(!c){$('captionStatus').textContent='Open a saved clip to add and edit captions.';$('captionText').value='';return;}
+  const ordered=currentCaptions().slice().sort((a,b)=>a.start-b.start),clipStart=rangeIsValid()?editRange.start:c.start,clipEnd=rangeIsValid()?editRange.end:c.end,clipDuration=Math.max(.1,clipEnd-clipStart),zoom=Number($('captionZoom').value)||1,viewDuration=clipDuration/zoom;
+  const center=Math.max(clipStart+viewDuration/2,Math.min(clipEnd-viewDuration/2,video.currentTime));captionTrackView={start:center-viewDuration/2,end:center+viewDuration/2};$('captionZoomLabel').textContent=zoom===1?'Full clip':zoom+'× zoom · '+fmtFull(captionTrackView.start)+'–'+fmtFull(captionTrackView.end);
+  ordered.forEach((item,index)=>{
+    const row=document.createElement('div');row.className='captionRow'+(item.id===selectedCaptionId?' active':'');row.dataset.captionId=item.id;
+    const overlaps=ordered.some(other=>other.id!==item.id&&other.start<item.end&&other.end>item.start);
+    const btn=document.createElement('button');btn.textContent=String(item.text||'Untitled caption');btn.title='Click to seek to this caption';
+    btn.addEventListener('click',async e=>{e.stopPropagation();selectedCaptionId=item.id;await seekTo(item.start);updateCaptionEditor();drawPreview();});row.appendChild(btn);
+    const meta=document.createElement('small');meta.textContent=fmtFull(item.start)+'–'+fmtFull(item.end)+(item.speaker?' · '+item.speaker:'')+(item.reviewed?' · Reviewed':' · Needs review')+(overlaps?' · Overlaps another caption':'')+(item.end<=clipStart||item.start>=clipEnd?' · Outside clip':'');row.appendChild(meta);
+    const del=document.createElement('button');del.textContent='Delete';del.title='Delete this caption';del.addEventListener('click',e=>{e.stopPropagation();recordCaptionUndo();currentCaptions().splice(currentCaptions().findIndex(x=>x.id===item.id),1);captionProjectDirty=true;markClipEdited(c);if(selectedCaptionId===item.id)selectedCaptionId=null;updateCaptionEditor();drawPreview();});row.appendChild(del);$('captionList').appendChild(row);
+    const block=document.createElement('div');block.dataset.captionId=item.id;block.className='captionBlock'+(item.id===selectedCaptionId?' selected':'');block.style.left=((item.start-captionTrackView.start)/viewDuration*100)+'%';block.style.width=Math.max(.5,(item.end-item.start)/viewDuration*100)+'%';block.textContent=String(item.text||'Caption');block.title=fmtFull(item.start)+' to '+fmtFull(item.end)+' — drag to move; drag edges to trim';
+    const left=document.createElement('span');left.className='captionEdge left';const right=document.createElement('span');right.className='captionEdge right';block.appendChild(left);block.appendChild(right);
+    let pointer=null;const down=(ev,mode)=>{ev.preventDefault();ev.stopPropagation();recordCaptionUndo();selectedCaptionId=item.id;pointer={x:ev.clientX,start:item.start,end:item.end,mode};block.setPointerCapture(ev.pointerId);};
+    block.addEventListener('pointerdown',ev=>down(ev,'move'));left.addEventListener('pointerdown',ev=>down(ev,'left'));right.addEventListener('pointerdown',ev=>down(ev,'right'));
+    block.addEventListener('pointermove',ev=>{if(!pointer)return;const r=$('captionTrack').getBoundingClientRect(),delta=(ev.clientX-pointer.x)/Math.max(1,r.width)*viewDuration,min=clipStart,max=clipEnd;
+      if(pointer.mode==='move'){const len=pointer.end-pointer.start;item.start=Math.max(min,Math.min(max-len,pointer.start+delta));item.end=item.start+len;}
+      else if(pointer.mode==='left')item.start=Math.max(min,Math.min(pointer.end-.1,pointer.start+delta));else item.end=Math.max(pointer.start+.1,Math.min(max,pointer.end+delta));
+      $('captionStart').value=item.start.toFixed(3);$('captionEnd').value=item.end.toFixed(3);block.style.left=((item.start-captionTrackView.start)/viewDuration*100)+'%';block.style.width=Math.max(.5,(item.end-item.start)/viewDuration*100)+'%';drawPreview();});
+    block.addEventListener('pointerup',async()=>{if(pointer){item.reviewed=false;captionProjectDirty=true;markClipEdited(c);pointer=null;await seekTo(item.start);updateCaptionEditor();drawPreview();}});
+    block.addEventListener('click',async ev=>{ev.stopPropagation();selectedCaptionId=item.id;await seekTo(item.start);updateCaptionEditor();drawPreview();});$('captionTrack').appendChild(block);
+  });
+  const head=document.createElement('div');head.className='captionTrackPlayhead';head.style.left=((video.currentTime-captionTrackView.start)/viewDuration*100)+'%';$('captionTrack').appendChild(head);
+  const active=ordered.find(x=>x.id===selectedCaptionId);
+  if(active){$('captionText').value=active.text||'';$('captionStart').value=active.start;$('captionEnd').value=active.end;$('captionSpeaker').value=active.speaker||'';$('captionReviewed').checked=!!active.reviewed;setCaptionStyleControls(captionStyleFor(active,false));}
+  else{$('captionText').value='';$('captionStart').value='';$('captionEnd').value='';$('captionSpeaker').value='';$('captionReviewed').checked=false;$('captionStatus').textContent=ordered.length?ordered.length+' caption(s) saved. Choose one to edit or add another.':'No captions yet. Click + Add Caption at the playhead.';setCaptionStyleControls(captionStyle);}
+}
+function saveCaptionDraft(strict=true,record=true){
+  const cap=currentCaptions().find(x=>x.id===selectedCaptionId);if(!cap){$('captionStatus').textContent='Choose + Add Caption before saving text.';return false;}
+  const start=Number($('captionStart').value),end=Number($('captionEnd').value),c=curClip();
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>(video.duration||Infinity)){if(strict)alert('Enter valid caption times: start must be before end and both must be within the video.');return false;}
+  if(!String($('captionText').value).trim()){if(strict)alert('Enter the words spoken in this caption.');return false;}
+  if(cap.start===start&&cap.end===end&&cap.text===$('captionText').value.trim()&&cap.speaker===$('captionSpeaker').value.trim()&&cap.reviewed===$('captionReviewed').checked)return true;
+  if(record)recordCaptionUndo();
+  cap.start=start;cap.end=end;cap.text=$('captionText').value.trim();cap.speaker=$('captionSpeaker').value.trim();cap.reviewed=$('captionReviewed').checked;cap.style=cap.style||null;
+  captionProjectDirty=true;markClipEdited(c);currentCaptions().sort((a,b)=>a.start-b.start);updateCaptionEditor();drawPreview();return true;
+}
+function addCaptionAtPlayhead(){
+  const c=curClip();if(!c){alert('Open or add a clip before adding captions.');return;}
+  const clipStart=rangeIsValid()?editRange.start:c.start,clipEnd=rangeIsValid()?editRange.end:c.end;
+  const start=Math.max(clipStart,Math.min(video.currentTime,clipEnd-.1)),end=Math.min(clipEnd,start+3),cap={id:newClipId(),start,end,text:'',speaker:'',reviewed:false,style:null,words:null};
+  if(end<=start){alert('The clip range must be at least 0.1 seconds long.');return;}
+  recordCaptionUndo();currentCaptions().push(cap);selectedCaptionId=cap.id;captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();$('captionStatus').textContent='New caption added. Enter the exact words spoken, adjust timing if needed, then save.';$('captionText').focus();
+}
+function syncCaptionInputDraft(){
+  const c=curClip(),cap=currentCaptions().find(x=>x.id===selectedCaptionId);if(!c||!cap)return;
+  if(!captionInputUndoStarted){recordCaptionUndo();captionInputUndoStarted=true;}
+  const start=Number($('captionStart').value),end=Number($('captionEnd').value);
+  if(Number.isFinite(start)&&Number.isFinite(end)&&start>=0&&end>start&&end<=(video.duration||Infinity)){cap.start=start;cap.end=end;}
+  else $('captionStatus').textContent='Caption time must stay within the source video, with Start before End. The last valid timing is retained until corrected.';
+  cap.text=$('captionText').value.trim();cap.speaker=$('captionSpeaker').value.trim();cap.reviewed=$('captionReviewed').checked;
+  captionProjectDirty=true;markClipEdited(c);
+  const row=Array.from($('captionList').children).find(el=>el.dataset.captionId===cap.id);if(row&&row.children[0])row.children[0].textContent=cap.text||'Untitled caption';
+  const block=Array.from($('captionTrack').children).find(el=>el.dataset.captionId===cap.id);if(block&&block.childNodes&&block.childNodes[0])block.childNodes[0].textContent=cap.text||'Caption';
+  drawPreview();
+}
+function downloadSubtitle(format){
+  const c=curClip();if(!c){alert('Open a saved clip first.');return;}
+  const text=makeSubtitleText(c,format);if(!text.trim()){alert('This clip has no captions inside its saved range.');return;}
+  const blob=new Blob([text],{type:format==='vtt'?'text/vtt':'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function splitSelectedCaption(){
+  const c=curClip(),list=currentCaptions().sort((a,b)=>a.start-b.start),i=list.findIndex(x=>x.id===selectedCaptionId),cap=list[i],t=video.currentTime;
+  if(!cap||t<=cap.start+.05||t>=cap.end-.05){$('captionStatus').textContent='Move the playhead inside the selected caption to split it.';return;}
+  const words=String(cap.text).trim().split(/\s+/),fraction=(t-cap.start)/(cap.end-cap.start),cut=Math.max(1,Math.min(words.length-1,Math.round(words.length*fraction)));
+  if(words.length<2){$('captionStatus').textContent='Add another word before splitting this caption.';return;}
+  recordCaptionUndo();const next={...cap,id:newClipId(),start:t,end:cap.end,text:words.slice(cut).join(' '),reviewed:false,style:cap.style?{...cap.style}:null};
+  cap.end=t;cap.text=words.slice(0,cut).join(' ');cap.reviewed=false;
+  if(Array.isArray(cap.words)){const originalWords=cap.words;cap.words=originalWords.filter(w=>w.start<t);next.words=originalWords.filter(w=>w.start>=t);}
+  currentCaptions().push(next);selectedCaptionId=next.id;captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();drawPreview();
+}
+function mergeSelectedCaption(){
+  const c=curClip(),list=currentCaptions().sort((a,b)=>a.start-b.start),i=list.findIndex(x=>x.id===selectedCaptionId),cap=list[i],next=list[i+1];
+  if(!cap||!next){$('captionStatus').textContent='Choose a caption that has a next caption.';return;}
+  if(next.start-cap.end>2&&!confirm('There is a pause of '+(next.start-cap.end).toFixed(1)+' seconds between these captions. Merge them anyway?'))return;
+  recordCaptionUndo();cap.end=next.end;cap.text=[cap.text,next.text].filter(Boolean).join(' ');cap.reviewed=false;
+  if(Array.isArray(cap.words)&&Array.isArray(next.words))cap.words=cap.words.concat(next.words);else cap.words=null;
+  currentCaptions().splice(currentCaptions().findIndex(x=>x.id===next.id),1);captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();drawPreview();
+}
+let thumbObserver=null, thumbQueue=[], thumbWorking=false;
+function watchClipThumbnail(el,c){
+  if(c.thumbnail){el.style.backgroundImage='url("'+c.thumbnail+'")';return;}
+  if(!('IntersectionObserver' in window)){enqueueClipThumbnail(c);return;}
+  if(!thumbObserver)thumbObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{
+    if(!entry.isIntersecting)return; thumbObserver.unobserve(entry.target);
+    const clip=clips.find(item=>item.id===entry.target.dataset.clipId);if(clip)enqueueClipThumbnail(clip);
+  }),{root:$('clipList'),rootMargin:'120px'});
+  el.dataset.clipId=c.id;thumbObserver.observe(el);
+}
+function enqueueClipThumbnail(c){if(c.thumbnail||c._thumbQueued||c._thumbWorking)return;c._thumbQueued=true;thumbQueue.push(c);processClipThumbnail();}
+function processClipThumbnail(){
+  if(thumbWorking||!thumbQueue.length)return;
+  const c=thumbQueue.shift();if(!clips.includes(c)){c._thumbQueued=false;processClipThumbnail();return;}
+  thumbWorking=true;c._thumbQueued=false;c._thumbWorking=true;
+  const thumbVideo=document.createElement('video'), source=video.currentSrc||video.src;
+  let finished=false;
+  const finish=()=>{
+    if(finished)return;finished=true;clearTimeout(timer);
+    try{if(thumbVideo.readyState>=2){const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;
+      const ctx=canvas.getContext('2d'),sw=thumbVideo.videoWidth,sh=thumbVideo.videoHeight,scale=Math.max(160/sw,90/sh),w=sw*scale,h=sh*scale;
+      ctx.drawImage(thumbVideo,(160-w)/2,(90-h)/2,w,h);c.thumbnail=canvas.toDataURL('image/jpeg',0.62);}}
+    catch(err){log('Could not create a thumbnail for '+c.name+': '+err.message);}
+    thumbVideo.pause();thumbVideo.removeAttribute('src');thumbVideo.load();thumbWorking=false;c._thumbWorking=false;renderClips();processClipThumbnail();
+  };
+  const timer=setTimeout(finish,12000);
+  thumbVideo.muted=true;thumbVideo.preload='metadata';thumbVideo.addEventListener('loadedmetadata',()=>{
+    thumbVideo.currentTime=Math.min(Math.max(0,c.start),Math.max(0,thumbVideo.duration-0.05));
+    if(thumbVideo.currentTime===0)thumbVideo.addEventListener('loadeddata',finish,{once:true});
+  },{once:true});
+  thumbVideo.addEventListener('seeked',finish,{once:true});thumbVideo.src=source;
+}
+function renderClips(){
+  if(thumbObserver)thumbObserver.disconnect();
+  const list=$('clipList');list.innerHTML='';$('clipCount').textContent=String(clips.length);
+  const query=$('clipSearch').value.trim().toLowerCase(), reviewFilter=$('clipFilter').value, approvalFilter=$('approvalFilter').value, exportFilter=$('exportFilter').value;
+  let shown=clips.map((c,i)=>({c,i})).filter(({c})=>{
+    if(query&&!c.name.toLowerCase().includes(query))return false;
+    if(reviewFilter!=='all'&&(c.trackingStatus||((c.track||[]).length?'needs-review':'waiting-target'))!==reviewFilter)return false;
+    if(approvalFilter!=='all'&&(c.approvalState||'needs-review')!==approvalFilter)return false;
+    if(exportFilter==='not-exported'&&c.exportStatus==='exported')return false;
+    if(exportFilter==='exported'&&c.exportStatus!=='exported')return false;
+    if(exportFilter==='failed'&&c.exportStatus!=='failed')return false;
+    return true;
+  });
+  const sort=$('clipSort').value;
+  if(sort==='start')shown.sort((a,b)=>a.c.start-b.c.start);
+  if(sort==='duration')shown.sort((a,b)=>(a.c.end-a.c.start)-(b.c.end-b.c.start));
+  if(sort==='created')shown.sort((a,b)=>a.c.number-b.c.number);
+  for(const {c,i} of shown){
+    const card=document.createElement('article');card.className='clipCard'+(i===sel?' selected':'');card.setAttribute('aria-current',i===sel?'true':'false');card.setAttribute('role','button');card.setAttribute('tabindex','0');card.setAttribute('aria-label','Open Clip '+String(c.number).padStart(3,'0')+': '+c.name);
+    const openCard=async()=>{if(activeExportIds.size){log('Wait for the current export to finish before loading a different clip.');return;}if(!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();};
+    card.addEventListener('click',openCard);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openCard();}});
+    const top=document.createElement('div');top.className='clipCard-top';
+    const checkWrap=document.createElement('label');checkWrap.title='Select this clip for batch export';checkWrap.addEventListener('click',e=>e.stopPropagation());
+    const check=document.createElement('input');check.type='checkbox';check.checked=!!c.batchSelected;check.setAttribute('aria-label','Select Clip '+String(c.number).padStart(3,'0')+' for batch export');
+    check.addEventListener('click',e=>e.stopPropagation());check.addEventListener('change',()=>{c.batchSelected=check.checked;});checkWrap.appendChild(check);top.appendChild(checkWrap);
+    const thumb=document.createElement('div');thumb.className='clipThumb';const number=document.createElement('span');number.className='clipNumber';number.textContent='Clip '+String(c.number).padStart(3,'0');thumb.appendChild(number);top.appendChild(thumb);watchClipThumbnail(thumb,c);
+    const title=document.createElement('input');title.className='clipTitle';title.value=c.name;title.setAttribute('aria-label','Clip title');
+    title.addEventListener('click',e=>e.stopPropagation());title.addEventListener('change',()=>{if(activeExportIds.size){title.value=c.name;return;}const next=title.value.trim()||'Untitled clip';if(next!==c.name){if(i===sel){$('clipName').value=next;updateRangeUI();return;}c.name=next;markClipEdited(c);}renderClips();});top.appendChild(title);card.appendChild(top);
+    const duration=Math.max(0,c.end-c.start);
+    const times=document.createElement('div');times.className='clipTimes';times.textContent=fmtFull(c.start)+' to '+fmtFull(c.end)+' · '+duration.toFixed(1)+' seconds';card.appendChild(times);
+    const meta=document.createElement('div');meta.className='clipMeta';meta.textContent=approvalLabel(c)+' · Captions: '+((c.captions||[]).filter(x=>String(x.text||'').trim()).length?'Ready':'None')+' · Tracking: '+clipTrackingLabel(c)+' · Export: '+clipExportLabel(c)+(c.exportError?' · '+c.exportError:'');card.appendChild(meta);
+    const actions=document.createElement('div');actions.className='clipActions';
+    const action=(label,fn,titleText,parent=actions)=>{const b=document.createElement('button');b.textContent=label;if(titleText)b.title=titleText;b.addEventListener('click',e=>{e.stopPropagation();fn();});parent.appendChild(b);return b;};
+    const exportButton=action('Export',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClip(c);},!isApprovedClip(c)?'Approve this clip before exporting':!trackingExportReady(c)?'Tracking must finish or be corrected with keyframes':'Export this approved clip');
+    exportButton.disabled=activeExportIds.size>0||!isApprovedClip(c)||!trackingExportReady(c);
+    const reviewButton=action(clipReviewSession&&clipReviewSession.clipId===c.id?'Reviewing '+(c.reviewPlaybackProgress||0)+'%':c.reviewPlaybackComplete?'Review Again':'Review Clip',()=>startClipReview(c),'Play this complete clip, then mark it reviewed');reviewButton.className='reviewClipAction';reviewButton.disabled=activeExportIds.size>0||!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity;
+    const markReviewedButton=action(c.reviewed?'Reviewed ✓':'Mark Reviewed',()=>markClipReviewed(c),'Enabled after Review Clip has played from start to end');markReviewedButton.disabled=!c.reviewPlaybackComplete||c.reviewed||activeExportIds.size>0;
+    const approveButton=action(c.approvalState==='approved'?'Approved ✓':'Approve Clip',()=>approveClip(c),'Mark Reviewed is required before approval');approveButton.className='approveClipAction';approveButton.disabled=!c.reviewed||isApprovedClip(c)||activeExportIds.size>0;
+    const more=document.createElement('details');more.className='clipMore';const summary=document.createElement('summary');summary.textContent='More';more.appendChild(summary);
+    const rejectButton=action(c.approvalState==='rejected'?'Rejected':'Reject Clip',()=>rejectClip(c),'Keep this clip out of approved exports',more);rejectButton.disabled=activeExportIds.size>0;
+    if(c.approvalState==='rejected')action('Return to Suggestions',()=>{c.approvalState='suggested';c.rejectedAt=null;captionProjectDirty=true;renderClips();},'Return this clip to the review list',more);
+    const smoothLabel=document.createElement('label');smoothLabel.textContent='Crop smoothness ';const smoothSelect=document.createElement('select');[['global','Global ('+$('trackingSmoothness').value+'%)'],['30','30%'],['55','55%'],['80','80%'],['100','100%']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;smoothSelect.appendChild(o);});smoothSelect.value=Number.isFinite(c.smoothness)?String(c.smoothness):'global';smoothSelect.disabled=activeExportIds.size>0;smoothSelect.addEventListener('click',e=>e.stopPropagation());smoothSelect.addEventListener('change',e=>{c.smoothness=e.target.value==='global'?null:Number(e.target.value);markClipEdited(c);captionProjectDirty=true;drawPreview();renderClips();});smoothLabel.appendChild(smoothSelect);more.appendChild(smoothLabel);
+    action(c.favorite?'★ Priority':'☆ Priority',()=>{c.favorite=!c.favorite;renderClips();},'Mark this clip as a priority',more);
+    action('Duplicate',()=>duplicateClip(c),'Make an independent copy of this clip',more);
+    const deleteButton=action('Remove',()=>deleteClip(i),'Remove this clip from the project; source video stays untouched',more);
+    deleteButton.disabled=activeExportIds.size>0;
+    actions.appendChild(more);card.appendChild(actions);list.appendChild(card);
+  }
+  renderKeys();
+}
+function loadClipToUI(c,seek=true){
+  if(clipReviewSession&&clipReviewSession.clipId!==c.id){clipReviewSession=null;$('clipReviewStatus').textContent='Review playback stopped because a different clip was opened.';}
+  if(!Array.isArray(c.captions))c.captions=[];
+  captionPreviewUntil=0;captionInputUndoStarted=false;captionUndo=[];captionRedo=[];updateCaptionUndoButtons();
+  sel=clips.indexOf(c); editRange={start:c.start,end:c.end};savedRange={...editRange};
+  $('clipName').value=c.name;
+  $('outW').value = c.outW; $('outH').value = c.outH;
+  manualCenter=null;cropWasDragged=false;
+  updateRangeUI();selectedCaptionId=null;updateCaptionEditor();
+  if(c.sourceName&&sourceName&&c.sourceName!==sourceName){log('This clip belongs to "'+c.sourceName+'". Load that source video to preview it.');return;}
+  if(seek)seekTo(c.start);
+}
+function syncClip(){
+  const c=curClip();if(!rangeIsValid()){alert('Set START before END, and keep both markers inside the video.');return false;}
+  if(!c)return true;
+  const old={name:c.name,start:c.start,end:c.end,w:c.outW,h:c.outH};
+  c.name=$('clipName').value.trim()||c.name;c.start=editRange.start;c.end=editRange.end;
+  c.outW=parseInt($('outW').value)||1080;c.outH=parseInt($('outH').value)||1920;
+  if(old.name!==c.name||old.start!==c.start||old.end!==c.end||old.w!==c.outW||old.h!==c.outH)markClipEdited(c);
+  if(old.start!==c.start||old.end!==c.end){c.track=[];c.trackingValidated=false;queueClipTracking(c);}
+  return true;
+}
+function saveCurrentClipChanges(){
+  const c=curClip();if(!c)return false;
+  const outside=(c.captions||[]).filter(cap=>cap.start<editRange.start||cap.end>editRange.end);
+  if(outside.length&&!confirm(outside.length+' caption(s) will fall partly or fully outside the new clip range. They will remain saved but will be excluded or trimmed in exports. Save these clip boundaries?'))return false;
+  if(!syncClip())return false;
+  savedRange={start:c.start,end:c.end};$('clipName').value=c.name;updateRangeUI();renderClips();log('Saved changes to '+c.name+'.');return true;
+}
+function createClipFromRange(){
+  if(sel>=0){alert('This clip is already saved. Use Save Changes to update it.');return false;}
+  if(!video.videoWidth||!rangeIsValid()){alert('Set START and END to choose a valid clip before adding it.');return false;}
+  const c={id:newClipId(),number:Math.max(0,...clips.map(x=>x.number||0))+1,name:$('clipName').value.trim()||('Clip '+(clips.length+1)),
+    sourceName:sourceName,start:editRange.start,end:editRange.end,outW:parseInt($('outW').value)||1080,outH:parseInt($('outH').value)||1920,
+    keys:[],track:[],captions:[],reviewed:false,approvalState:'needs-review',approvedAt:null,creationMethod:'manual',exportStatus:'not-exported',exportOutdated:false,batchSelected:false,favorite:false,sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:trackingTargetId||''};
+  clips.push(c);captionProjectDirty=true;sel=clips.length-1;savedRange={start:c.start,end:c.end};$('clipName').value=c.name;
+  updateRangeUI();renderClips();updateCaptionEditor();queueClipTracking(c);log('Added '+c.name+' to My Clips; automatic tracking '+(selectedAnchor?'queued.':'waiting for a person to be selected.'));return true;
+}
+function createTranscriptSuggestions(override){
+  if(!video.videoWidth||!sourceName){$('transcriptStatus').textContent='Load the source video first, then import its source-timed transcript.';return 0;}
+  if(!sourceTranscript.length){$('transcriptStatus').textContent='Import a source-timed SRT or WebVTT transcript before generating suggestions.';return 0;}
+  if(transcriptSourceName!==sourceName){$('transcriptStatus').textContent='The imported transcript belongs to '+transcriptSourceName+'. Import the transcript for '+sourceName+' before generating clips.';return 0;}
+  const target=(override&&override.target)||Number($('targetDuration').value),min=(override&&override.min)||Number($('minDuration').value),max=(override&&override.max)||Number($('maxDuration').value);let suggestions;
+  if(override&&override.candidates){ suggestions=override.candidates; }
+  else {
+    try{suggestions=buildTranscriptCandidates(sourceTranscript,{target,min,max,sourceDuration:video.duration});}
+    catch(err){alert(err.message);return 0;}
+  }
+  const avoid=$('avoidDuplicates').checked;let added=0,skipped=0;
+  for(const item of suggestions){
+    const duration=item.end-item.start;
+    if(avoid&&clips.some(c=>c.sourceName===sourceName&&Math.min(c.end,item.end)-Math.max(c.start,item.start)>=Math.min(c.end-c.start,duration)*.8)){skipped++;continue;}
+    const n=Math.max(0,...clips.map(c=>c.number||0))+1,withCaptions=(override&&override.withCaptions!==undefined)?override.withCaptions:$('autoCaptions').checked,vertical=$('prepareVertical').checked;
+    const c={id:newClipId(),number:n,name:'Suggested moment '+String(n).padStart(3,'0'),sourceName,start:item.start,end:item.end,
+      outW:vertical?1080:(parseInt($('outW').value)||1080),outH:vertical?1920:(parseInt($('outH').value)||1920),keys:[],track:[],
+      captions:withCaptions?item.cues.map(cue=>({id:newClipId(),start:cue.start,end:cue.end,text:cue.text,speaker:'',reviewed:false,style:null,words:null})):[],
+      reviewed:false,approvalState:'suggested',approvedAt:null,rejectedAt:null,creationMethod:'auto-transcript',sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:trackingTargetId||'',
+      suggestionRationale:'Transcript cues grouped near the '+target+'-second target. Clip boundaries remain at cue sentence or pause boundaries.'+(item.activityScore!==undefined?' Activity score '+Math.round(item.activityScore*100)+'/100 (most talking, loudest, most continuous speech).':''),
+      exportStatus:'not-exported',exportOutdated:false,batchSelected:false,favorite:false};
+    clips.push(c);added++;
+  }
+  captionProjectDirty=captionProjectDirty||added>0;
+  if(added){const created=clips.slice(-added);created.forEach(queueClipTracking);if(sel<0){sel=clips.indexOf(created[0]);loadClipToUI(curClip());}renderClips();}
+  $('transcriptStatus').textContent=added+' suggested clip(s) added for review.'+(skipped?' '+skipped+' duplicate moment(s) skipped.':'')+(suggestions.length?' No existing clips were removed.':'');
+  log('Transcript heuristic created '+added+' suggested clip(s); '+skipped+' duplicate(s) skipped. No semantic ranking was performed.');
+  return added;
+}
+function approveSelectedClips(){const selected=clips.filter(c=>c.batchSelected),canApprove=selected.filter(c=>c.reviewed);if(!selected.length){alert('Select clips in My Clips first.');return;}canApprove.forEach(c=>{c.approvalState='approved';c.approvedAt=new Date().toISOString();c.rejectedAt=null;});captionProjectDirty=true;renderClips();const skipped=selected.length-canApprove.length;alert(canApprove.length+' clip(s) approved.'+(skipped?' '+skipped+' clip(s) still need to be marked Reviewed.':''));}
+function rejectSelectedClips(){const selected=clips.filter(c=>c.batchSelected);if(!selected.length){alert('Select clips in My Clips first.');return;}selected.forEach(c=>{c.approvalState='rejected';c.approvedAt=null;c.rejectedAt=new Date().toISOString();c.batchSelected=false;});captionProjectDirty=true;renderClips();}
+function discardCurrentChanges(){
+  const c=curClip();if(c){editRange={start:c.start,end:c.end};savedRange={...editRange};$('clipName').value=c.name;$('outW').value=c.outW;$('outH').value=c.outH;}
+  else{editRange={start:null,end:null};savedRange=null;$('clipName').value='New clip';}
+  previewingClip=false;updateRangeUI();renderClips();updateCaptionEditor();
+}
+function resetToNewClip(){sel=-1;editRange={start:null,end:null};savedRange=null;selectedCaptionId=null;$('clipName').value='New clip';manualCenter=null;cropWasDragged=false;previewingClip=false;updateRangeUI();updateCaptionEditor();log('Ready to create a new clip.');}
+function resolveUnsavedEdits(){
+  if(!rangeIsDirty())return Promise.resolve(true);
+  $('unsavedMessage').textContent=curClip()?'Save boundary or title changes, discard them, or keep editing.':'Add this selected range as a clip, discard it, or keep editing.';
+  $('unsavedSave').textContent=curClip()?'Save Changes':'Add Clip';
+  if(!$('unsavedDialog').showModal){const discard=confirm('You have unsaved clip changes. Press OK to discard them, or Cancel to keep editing.');if(discard)discardCurrentChanges();return Promise.resolve(discard);}
+  $('unsavedDialog').showModal();return new Promise(resolve=>{pendingUnsavedResolver=resolve;});
+}
+async function duplicateClip(c){if(!await resolveUnsavedEdits())return;const clone=JSON.parse(JSON.stringify(c));clone.id=newClipId();clone.number=Math.max(0,...clips.map(x=>x.number||0))+1;clone.name=c.name+' copy';clone.reviewed=false;clone.approvalState='needs-review';clone.approvedAt=null;clone.exportStatus='not-exported';clone.exportOutdated=!!clone.exportedAt;clone.batchSelected=false;clone.captions=(clone.captions||[]).map(cap=>({...cap,id:newClipId()}));clone.track=[];clone.trackingValidated=false;clone.trackingProgress=0;clone.trackingError='';clone.trackingStatus='queued';clone.trackingTargetId=trackingTargetId||'';clips.push(clone);captionProjectDirty=true;loadClipToUI(clone);renderClips();queueClipTracking(clone);log('Duplicated '+c.name+' as '+clone.name+'; automatic tracking queued.');}
+async function deleteClip(i){if(i===sel&&!await resolveUnsavedEdits())return;if(i===sel&&captionProjectDirty&&!confirm('This clip has caption or project edits not yet saved to JSON. Remove it and discard those edits?'))return;const removed=clips[i];if(!removed)return;clips.splice(i,1);captionProjectDirty=true;if(i===sel){sel=-1;resetToNewClip();}else if(sel>i)sel--;renderClips();log('Removed '+removed.name+' from this project. The source video was not changed.');}
+function renderKeys(){
+  const c = curClip(); const el = $('keyList');
+  if(!c){ el.textContent=''; return; }
+  el.innerHTML = '<strong>Keyframes:</strong> ' + (c.keys||[]).map((k,i)=> fmtFull(k.t)).join(', ') + (c.track && c.track.length ? '<br><strong>Auto-track:</strong> ' + c.track.length + ' samples' : '');
+}
+$('addKey').addEventListener('click', () => {
+  const c = curClip(); if(!c){ alert('Add a clip first.'); return; }
+  if(rangeIsDirty()){alert('Save or cancel the clip boundary changes before adding a crop correction.');return;}
+  // A deliberate drag is the user's intended fix at this moment; don't replace it with the old interpolated path.
+  const centre = (cropWasDragged && manualCenter) || cropCenterAt(c, video.currentTime) || manualCenter || {cx: video.videoWidth/2, cy: video.videoHeight/2};
+  c.keys = c.keys.filter(k => Math.abs(k.t-video.currentTime) > 0.25);
+  c.keys.push({t: video.currentTime, cx: centre.cx, cy: centre.cy, manual:true});
+  markClipEdited(c);
+  cropWasDragged=false;
+  c.keys.sort((a,b)=>a.t-b.t);
+  log('Keyframe added at ' + fmtFull(video.currentTime)); renderClips(); drawPreview();
+});
+$('clearKeys').addEventListener('click', () => {
+  const c = curClip(); if(!c) return;
+  c.keys = []; c.track = []; cropWasDragged=false; markClipEdited(c); log('Keyframes and tracking cleared for this clip.'); renderClips();
+});
+
+// --- Automatic people detection and matching numbered choices ---
+function renderCandidates(){
+  const wrap=$('candidates'), picker=$('personPicker'); wrap.innerHTML=''; picker.innerHTML='';
+  const sameFrame=video.videoWidth && detectedAt!=null && Math.abs(video.currentTime-detectedAt)<=0.12;
+  if(!sameFrame) return;
+  const sr=stage.getBoundingClientRect(), vr=videoContentRect();
+  const sx=vr.width/video.videoWidth, sy=vr.height/video.videoHeight, ox=vr.left-sr.left, oy=vr.top-sr.top;
+  candidates.forEach((c,i)=>{
+    const isSelected=selectedPerson===c, name='Person '+(i+1);
+    const d=document.createElement('div');
+    d.className='personBox'+(isSelected?' sel':(selectedAnchor?' dim':''));
+    d.style.left=(ox+c.x*sx)+'px'; d.style.top=(oy+c.y*sy)+'px';
+    d.style.width=Math.max(24,c.w*sx)+'px'; d.style.height=Math.max(24,c.h*sy)+'px';
+    const badge=document.createElement('span'); badge.textContent=isSelected?'✓ SELECTED — '+name:name; d.appendChild(badge);
+    d.addEventListener('click',ev=>{ev.stopPropagation();selectCandidate(i);}); wrap.appendChild(d);
+    const button=document.createElement('button'); button.className='personChoice'+(isSelected?' sel':'');
+    button.setAttribute('aria-pressed',String(isSelected));
+    button.innerHTML='<span class="number">'+(i+1)+'</span> '+name+(isSelected?' — SELECTED':'');
+    button.addEventListener('click',()=>selectCandidate(i)); picker.appendChild(button);
+  });
+}
+function selectCandidate(i){
+  if(activeExportIds&&activeExportIds.size)return;
+  selectedPerson=candidates[i]; if(!selectedPerson)return;
+  const cx=selectedPerson.x+selectedPerson.w/2, cy=selectedPerson.y+selectedPerson.h/2;
+  selectedAnchor={cx,cy}; selectedPersonNumber=i+1;
+  trackingTargetId=sourceIdentity+'|person@'+Math.round(cx)+','+Math.round(cy);
+  manualCenter={cx,cy}; cropWasDragged=false;
+  $('selInfo').textContent='You selected Person '+selectedPersonNumber+'. Queued clips will use this source target.';
+  $('selInfo').className='ok'; $('autoTrack').textContent='Retry Tracking for Clip';
+  for(const c of clips.filter(x=>x.sourceName===sourceName&&(x.trackingStatus==='waiting-target'||x.trackingStatus==='queued'||x.trackingTargetId&&x.trackingTargetId!==trackingTargetId))){markClipEdited(c);c.trackingRevision=(c.trackingRevision||0)+1;c.trackingTargetId=trackingTargetId;c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.track=[];c.trackingValidated=false;c.trackingStatus='queued';c.trackingError='';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}
+  log('Selected Person '+selectedPersonNumber+'. Queued clips will begin tracking automatically.'); renderCandidates(); drawPreview();processTrackingQueue();
+}
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src;
+    s.onload = () => res(); s.onerror = () => rej(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function loadCoco(){
+  if(cocoModel)return cocoModel;
+  if(!cocoLoadPromise)cocoLoadPromise=(async()=>{
+    if(!window.tf)await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js');
+    if(!window.cocoSsd)await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js');
+    cocoModel=await cocoSsd.load(); return cocoModel;
+  })().catch(err=>{cocoLoadPromise=null;throw err;});
+  return cocoLoadPromise;
+}
+function queueClipTracking(c){
+  if(!c)return;
+  markClipEdited(c);c.trackingValidated=false;captionProjectDirty=true;
+  c.trackingRevision=(c.trackingRevision||0)+1;c.trackingError='';c.trackingProgress=0;
+  if(!selectedAnchor||!trackingTargetId){c.trackingStatus='waiting-target';renderClips();return;}
+  c.trackingTargetId=trackingTargetId;c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.trackingStatus='queued';
+  if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);
+  captionProjectDirty=true;renderClips();setTimeout(processTrackingQueue,0);
+}
+function ensureTrackingVideo(){
+  if(!sourceIdentity||!video.videoWidth)throw new Error('Load the matching source video before tracking.');
+  if(!trackingVideo){trackingVideo=document.createElement('video');trackingVideo.muted=true;trackingVideo.playsInline=true;trackingVideo.preload='auto';trackingVideo.src=trackingVideoUrl||video.currentSrc||video.src;trackingVideo.load();}
+  const v=trackingVideo;
+  if(v.readyState>=1&&v.videoWidth)return Promise.resolve(v);
+  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('The background video could not load metadata.')),15000);v.addEventListener('loadedmetadata',()=>{clearTimeout(timer);resolve(v);},{once:true});v.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('The source video cannot be decoded for tracking.'));},{once:true});});
+}
+function seekTrackingVideo(v,t){return new Promise((resolve,reject)=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);v.removeEventListener('seeked',finish);resolve();};const timer=setTimeout(()=>{if(done)return;done=true;v.removeEventListener('seeked',finish);if(Math.abs(v.currentTime-t)<.08)resolve();else reject(new Error('Video seek timed out at '+fmtFull(t)+'.'));},5000);v.addEventListener('seeked',finish,{once:true});try{v.currentTime=Math.max(0,Math.min(v.duration||t,t));if(Math.abs(v.currentTime-t)<.01)finish();}catch(err){clearTimeout(timer);done=true;reject(err);}});}
+async function runAutomaticTracking(c){
+  const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...selectedAnchor},sid=c.sourceIdentity||sourceIdentity;
+  if(!anchor||!targetId)throw new Error('Select the person to follow once in the source video.');
+  if(c.sourceName&&c.sourceName!==sourceName)throw new Error('Load the matching source video: '+c.sourceName+'.');
+  if(sid!==sourceIdentity)throw new Error('Tracking target belongs to a different source recording.');
+  c.trackingStatus='in-progress';c.trackingProgress=0;renderClips();
+  const isMovementClip=c.creationMethod==='auto-movement';
+  const trackStep=isMovementClip? (parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1) || 1) : 0.5;
+  const trackSize=isMovementClip? (parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512) || 512) : 640;
+  const model=await loadCoco(),v=await ensureTrackingVideo(),scale=Math.min(1,trackSize/v.videoWidth),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(v.videoWidth*scale));canvas.height=Math.max(1,Math.round(v.videoHeight*scale));const ctx=canvas.getContext('2d');
+  const cacheKey=sid+'::'+targetId;if(!sourceTrackingCache.has(cacheKey))sourceTrackingCache.set(cacheKey,new Map());const cache=sourceTrackingCache.get(cacheKey);
+  const times=[c.start];for(let t=Math.ceil(c.start/trackStep)*trackStep;t<c.end-.01;t+=trackStep)if(t>c.start+.01)times.push(t);if(c.end>c.start+.01)times.push(c.end);
+  let last=anchor,points=[],lost=0,uncertain=0;
+  for(let n=0;n<times.length;n++){
+    if(trackStop)throw new Error('Tracking was cancelled.');
+    if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
+    const t=times[n],key=t.toFixed(3),cached=cache.get(key);
+    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else lost++;if(point.lost||point.lowConfidence)uncertain++;}
+    else{
+      await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
+      const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
+      const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.035,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.45&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.65?candidate:null;
+      const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
+      cache.set(key,point);points.push(point);if(best)last={cx:best.cx,cy:best.cy};else lost++;if(point.lost||point.lowConfidence)uncertain++;
+    }
+    c.trackingProgress=Math.round((n+1)/times.length*100);
+    if(sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
+    if(n%12===0)renderClips();
+    await new Promise(resolve=>setTimeout(resolve,0));
+  }
+  const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
+  if(!valid)throw new Error('Tracking samples did not cover the full clip range.');
+  c.track=points;c.trackingStatus=uncertain?'needs-review':'ready';c.trackingError='';c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingValidated=true;
+  if(uncertain)c.trackingError=uncertain+' low-confidence, ambiguous, or lost sample(s) held at the last reliable position.';
+  c.reviewed=false;c.exportStatus='not-exported';c.exportError='';captionProjectDirty=true;renderClips();
+  if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);drawPreview();}
+  log('Automatic tracking '+(uncertain?'needs review':'ready')+' for '+c.name+': '+points.length+' timestamped samples across '+(c.end-c.start).toFixed(1)+' seconds.');
+}
+async function processTrackingQueue(){
+  if(trackingQueueRunning||!selectedAnchor||!trackingTargetId||!video.videoWidth||activeExportIds.size)return;
+  trackingQueueRunning=true;
+  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);}renderClips();}finally{trackBusy=false;trackStop=false;}}
+  }finally{trackingQueueRunning=false;retiredTrackingUrls.forEach(url=>URL.revokeObjectURL(url));retiredTrackingUrls=[];}
+}
+async function detectPeopleAtCurrentFrame(requestId){
+  if(!video.videoWidth)return;
+  const frameTime=video.currentTime, priorAnchor=selectedAnchor;
+  try{
+    $('detectionInfo').textContent='Finding people in this frame locally… (first use downloads the model files).';
+    await loadCoco(); if(requestId!==detectRequest)return;
+    const off=document.createElement('canvas'), scale=Math.min(1,640/video.videoWidth);
+    off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
+    off.getContext('2d').drawImage(video,0,0,off.width,off.height);
+    const preds=await cocoModel.detect(off); if(requestId!==detectRequest || Math.abs(video.currentTime-frameTime)>0.12)return;
+    candidates=preds.filter(p=>p.class==='person'&&p.score>0.5).map(p=>({
+      x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score
+    }));
+    candidates=sortPeopleLeftToRight(candidates);
+    detectedAt=frameTime; selectedPerson=null;
+    if(priorAnchor&&candidates.length){
+      const matched=nearestPerson(candidates.map(p=>({ref:p,cx:p.x+p.w/2,cy:p.y+p.h/2})),priorAnchor,video.videoWidth*0.45);
+      if(matched){selectedPerson=matched.ref;selectedAnchor={cx:matched.cx,cy:matched.cy};selectedPersonNumber=candidates.indexOf(matched.ref)+1;
+        $('selInfo').textContent='You selected Person '+selectedPersonNumber+'. This is who will be followed.';
+        $('autoTrack').textContent='Retry Tracking for Clip';}
+    }
+    if(!candidates.length){
+      $('detectionInfo').textContent='No people found in this frame. Scrub to a clearer moment or use manual keyframes.';
+      if(priorAnchor){$('selInfo').textContent='Your selection is saved, but no person was found in this frame. Tracking will hold its last position here.';}
+      log('No people detected at '+fmtFull(frameTime)+'. Try another frame or use manual keyframes.');
+    }else if(candidates.length===1&&!priorAnchor){
+      $('detectionInfo').textContent='One person found in the current frame; selected as the source tracking target.';selectCandidate(0);
+    }else{
+      $('detectionInfo').textContent=candidates.length+' people found. Boxes and numbers describe this frame, ordered left to right.';
+      if(priorAnchor&&!selectedPerson)$('selInfo').textContent='Your selection is saved. No close match was found in this frame; tracking will hold its last position.';
+      else if(!priorAnchor){$('selInfo').textContent='No person selected. Click a numbered box or Person button below the video.';$('selInfo').className='warn';}
+    }
+    renderCandidates(); drawPreview();
+  }catch(err){
+    if(requestId!==detectRequest)return;
+    $('detectionInfo').textContent='People could not be found. Check your internet connection for the first model download, or use manual keyframes.';
+    log('People detection failed: '+err.message); renderCandidates();
+  }
+}
+function requestPeopleDetection(delay=350){
+  if(!video.videoWidth||trackBusy)return;
+  detectRequest++; const requestId=detectRequest;
+  clearTimeout(detectionTimer); detectedAt=null; renderCandidates();
+  $('detectionInfo').textContent='Finding people in this frame…';
+  detectionTimer=setTimeout(()=>detectPeopleAtCurrentFrame(requestId),delay);
+}
+$('detectPeople').addEventListener('click',()=>{
+  if(!video.videoWidth){$('detectionInfo').textContent='Choose a video first.';return;}
+  video.pause();$('playBtn').textContent='▶ Play'; requestPeopleDetection(0);
+});
+$('clearSel').addEventListener('click', () => {
+  selectedPerson=null; selectedAnchor=null; selectedPersonNumber=null;trackingTargetId='';trackStop=true;trackingQueue=[];clips.filter(c=>c.sourceName===sourceName&&c.trackingStatus!=='ready').forEach(c=>{c.trackingRevision=(c.trackingRevision||0)+1;c.trackingStatus='waiting-target';c.trackingValidated=false;c.trackingError='Select a person to resume automatic tracking.';});renderClips(); renderCandidates();
+  $('autoTrack').textContent='Retry Tracking for Clip';
+  $('selInfo').textContent='No person selected. Click a numbered box or Person button under the video.';
+  $('selInfo').className='warn'; log('Selection cleared. Choose a person from the current frame to resume automatic tracking.');
+});
+$('autoTrack').addEventListener('click',()=>{const c=curClip();if(!c){alert('Add or open a clip first.');return;}queueClipTracking(c);});
+$('stopTrack').addEventListener('click',()=>{if(trackBusy)trackStop=true;trackingQueue=[];clips.filter(c=>c.trackingStatus==='queued').forEach(c=>{c.trackingStatus='needs-review';c.trackingValidated=false;c.trackingError='Tracking was stopped; use Retry Tracking after selecting the person.';});renderClips();});
+// --- Export (canvas + MediaRecorder, real-time, local only) ---
+function pickMime(){
+  const cands = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+  for(const m of cands){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
+  return '';
+}
+async function exportClipMedia(c,withCaptions=true){
+  exportStop = false;
+  const mime = pickMime();
+  const half = $('exportSize').value === 'half';
+  const ow = half ? Math.round(c.outW/2/2)*2 : c.outW;
+  const oh = half ? Math.round(c.outH/2/2)*2 : c.outH;
+  const canvas = document.createElement('canvas'); canvas.width = ow; canvas.height = oh;
+  const ctx = canvas.getContext('2d');
+  const fps = 30;
+  await seekTo(c.start);
+  video.muted = false; video.play();
+  const vStream = canvas.captureStream(fps);
+  let tracks = [...vStream.getVideoTracks()], audioCaptured=false;
+  try{
+    const vs = video.captureStream ? video.captureStream() : null;
+    if(vs){ const audio=vs.getAudioTracks(); tracks = tracks.concat(audio); audioCaptured=audio.length>0; }
+  }catch(e){ log('Note: audio track could not be captured in this browser; export may be silent.'); }
+  if(!audioCaptured) log('Note: this browser did not provide an audio track; the exported video may be silent.');
+  const stream = new MediaStream(tracks);
+  const rec = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 5000000} : undefined);
+  const chunks = [];
+  rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  const done = new Promise(res => { rec.onstop = res; });
+  rec.start(250);
+  log('Exporting ' + c.name + (withCaptions?' with burned-in captions':' without captions')+' in real time… keep this tab in front. Format: ' + (mime || 'browser default'));
+  // Draw loop
+  while(video.currentTime < c.end && !exportStop){
+    const centre = cropCenterAt(c, video.currentTime);
+    const crop = computeCrop(video.videoWidth, video.videoHeight, ow, oh, centre?centre.cx:null, centre?centre.cy:null);
+    if(crop.fill){
+      ctx.save(); ctx.filter = 'blur(18px) brightness(0.8)';
+      const bs = Math.max(ow/crop.w, oh/crop.h); const bw = crop.w*bs, bh = crop.h*bs;
+      ctx.drawImage(video, (ow-bw)/2, (oh-bh)/2, bw, bh); ctx.restore();
+      const fs = Math.min(ow/crop.w, oh/crop.h); const fw = crop.w*fs, fh = crop.h*fs;
+      ctx.drawImage(video, (ow-fw)/2, (oh-fh)/2, fw, fh);
+    } else {
+      ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ow, oh);
+    }
+    if(withCaptions)drawCaptionText(ctx,ow,oh,c,video.currentTime,false);
+    $('progress').value = Math.round((video.currentTime-c.start)/Math.max(0.1,(c.end-c.start))*100);
+    await new Promise(r => requestAnimationFrame(r));
+    if(video.paused && video.currentTime < c.end) video.play();
+  }
+  video.pause();
+  try{ rec.stop(); }catch(e){}
+  await done;
+  $('progress').value = exportStop ? 0 : 100;
+  if(exportStop){ log('Export cancelled; no download was created.'); return false; }
+  const blob = new Blob(chunks, {type: mime || 'video/webm'});
+  const ext = (mime && mime.indexOf('mp4') >= 0) ? 'mp4' : 'webm';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = (c.name.replace(/[^\w\- ]+/g,'').trim() || 'Clip') + '.' + ext;
+  a.textContent = '⬇ Download ' + a.download + ' (' + Math.round(blob.size/1048576*10)/10 + ' MB)';
+  a.style.display = 'block'; a.style.margin = '8px 0';
+  $('downloadArea').appendChild(a); a.click();
+  log('Export done: ' + a.download + ' — if it did not download automatically, click the link above.');
+  return true;
+}
+const activeExportIds=new Set();
+const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','transcriptInput','targetDuration','minDuration','maxDuration','autoCaptions','prepareVertical','avoidDuplicates','generateSuggestions','addCaption','saveCaption','splitCaption','mergeCaption','deleteCaption','exportSrt','exportVtt','exportWithCaptions','exportWithoutCaptions','generateCaptions','captionText','captionStart','captionEnd','captionSpeaker','captionReviewed','captionZoom','captionPreset','captionFont','captionSize','captionWeight','captionAlign','captionMaxLines','captionLineSpacing','captionPadding','captionBrandColor','captionColor','captionHighlight','captionOutline','captionOutlineWidth','captionBackground','captionOpacity','captionPosition','captionBgOn','captionRounded','captionWordHighlight','applyCaptionStyle','applyCaptionStyleAll','restoreCaptionStyle','saveCaptionPreset','undoCaption','redoCaption'];
+function setExportControlsLocked(locked){
+  exportControlIds.forEach(id=>{const el=$(id);if(el)el.disabled=locked;});
+  cropBox.style.pointerEvents=locked?'none':'auto';
+  $('captionTrack').style.pointerEvents=locked?'none':'auto';$('captionList').style.pointerEvents=locked?'none':'auto';
+}
+async function exportClip(c,withCaptions=true,skipApproval=false){
+  if(activeExportIds.size){log('Another export is already running. Wait for it to finish before starting another.');return false;}
+  if(!skipApproval && !isApprovedClip(c)){alert('This clip is '+approvalLabel(c)+'. Mark it Reviewed, then approve it before exporting, or use Save Picked Clips for clips you picked yourself.');return false;}
+  if(!trackingExportReady(c)){alert('Tracking for this clip is not ready. Wait for automatic tracking, or add keyframes at the START and END boundaries to correct the crop before exporting.');return false;}
+  if(c.trackingStatus==='in-progress'){alert('Wait for tracking to finish before exporting this clip so the preview and export use the same crop path.');return false;}
+  if(c.sourceName&&sourceName&&c.sourceName!==sourceName){c.exportError='Load the matching source video before exporting.';c.exportStatus='failed';renderClips();alert('This clip was made from "'+c.sourceName+'". Load that video before exporting it.');return false;}
+  activeExportIds.add(c.id);setExportControlsLocked(true);c.exportStatus='processing';c.exportError='';renderClips();
+  try{
+    const completed=await exportClipMedia(c,withCaptions);
+    if(completed){c.exportStatus='exported';c.exportedAt=new Date().toISOString();c.exportOutdated=false;}
+    else if(exportStop)c.exportStatus='not-exported';
+    return completed;
+  }catch(err){
+    c.exportStatus='failed';c.exportError=err.message||String(err);log('Export failed for '+c.name+': '+c.exportError);return false;
+  }finally{activeExportIds.delete(c.id);setExportControlsLocked(activeExportIds.size>0);renderClips();processTrackingQueue();}
+}
+async function exportClipBatch(batch,skipApproval=false,withCaptions=true){
+  if(!batch.length){alert(skipApproval?'No clips are ticked. Tick the clips you want to save, then press Save Picked Clips again.':'No clips are eligible for export. Select clips and make sure each one is approved.');return;}
+  if(activeExportIds.size){alert('An export is already running. Wait for it to finish before starting a batch.');return;}
+  if(!await resolveUnsavedEdits())return;
+  const selectedCount=batch.length;if(!skipApproval)batch=batch.filter(isApprovedClip);const blockedApproval=skipApproval?0:selectedCount-batch.length,approvedCount=batch.length;batch=batch.filter(trackingExportReady);const blockedTracking=approvedCount-batch.length;
+  if(!approvedCount){alert('No approved clips are in this selection. Review clips, mark them Reviewed, then approve them before export, or use Save Picked Clips.');return;}
+  if(!batch.length){alert('Clips need completed tracking or manual keyframes at both clip boundaries before export.');return;}
+  if(blockedApproval||blockedTracking)alert((blockedApproval?'Only approved clips can be exported. '+blockedApproval+' unapproved clip(s) were skipped. ':'')+(blockedTracking?blockedTracking+' clip(s) without validated tracking or boundary keyframes were skipped. ':'')+batch.length+' clip(s) will be exported.');
+  exportStop=false;batch.forEach(c=>{if(c.exportStatus!=='exported')c.exportStatus='pending';});renderClips();
+  for(let n=0;n<batch.length;n++){
+    if(exportStop)break;
+    const c=batch[n],i=clips.indexOf(c);if(i<0)continue;
+    $('exportInfo').textContent='Batch export '+(n+1)+' of '+batch.length+': '+c.name+'. Keep this tab in front.';
+    sel=i;loadClipToUI(c);renderClips();await exportClip(c,withCaptions,skipApproval);
+  }
+  if(exportStop){batch.filter(c=>c.exportStatus==='pending').forEach(c=>c.exportStatus='not-exported');$('exportInfo').textContent='Batch export cancelled. Finished files remain downloaded; the remaining clips were not exported.';}
+  else $('exportInfo').textContent='Batch export finished. See each clip card for its export status.';
+  renderClips();
+}
+$('exportSel').addEventListener('click', async () => {
+  if(!await resolveUnsavedEdits())return;
+  const c=curClip();if(!c){alert('Open a saved clip first.');return;}await exportClip(c);
+});
+$('exportAll').addEventListener('click', async () => {
+  await exportClipBatch(clips.filter(isApprovedClip));
+});
+$('exportSelectedClips').addEventListener('click',()=>exportClipBatch(clips.filter(c=>c.batchSelected)));
+$('exportPickedClips').addEventListener('click',()=>exportClipBatch(clips.filter(c=>c.batchSelected),true,true));
+$('exportPickedClipsNoCaptions').addEventListener('click',()=>exportClipBatch(clips.filter(c=>c.batchSelected),true,false));
+$('exportAllClips').addEventListener('click',()=>exportClipBatch(clips.filter(isApprovedClip)));
+$('approveSelectedClips').addEventListener('click',approveSelectedClips);
+$('rejectSelectedClips').addEventListener('click',rejectSelectedClips);
+$('exportSrt').addEventListener('click',()=>downloadSubtitle('srt'));
+$('exportVtt').addEventListener('click',()=>downloadSubtitle('vtt'));
+$('exportWithCaptions').addEventListener('click',async()=>{if(!await resolveUnsavedEdits())return;const c=curClip();if(!c){alert('Open a saved clip first.');return;}await exportClip(c,true);});
+$('exportWithoutCaptions').addEventListener('click',async()=>{if(!await resolveUnsavedEdits())return;const c=curClip();if(!c){alert('Open a saved clip first.');return;}await exportClip(c,false);});
+$('cancelExp').addEventListener('click', () => { exportStop = true; });
+
+// --- Project save/load (JSON only, no video data) ---
+$('saveProj').addEventListener('click', async () => {
+  if(!await resolveUnsavedEdits())return;
+  const savedClips=clips.map(c=>{const copy={...c};delete copy._thumbQueued;delete copy._thumbWorking;return copy;});
+      const data={app:'MercyCut Web',version:'1.9',sourceName:sourceName,sourceIdentity:sourceIdentity,sourceTrackingAnalysis:Array.from(sourceTrackingCache,([key,map])=>[key,Array.from(map.entries())]),trackingSmoothness:Number($('trackingSmoothness').value),transcriptSourceName:transcriptSourceName,transcriptFileName:transcriptFileName,sourceTranscript:sourceTranscript,captionStyle:captionStyle,customCaptionPresets:customCaptionPresets,clips:savedClips};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'MercyCut-Web-Project.json'; a.click();
+  captionProjectDirty=false;
+  log('Project saved (JSON). Note: the video file itself is NOT in it — reopen the same video, then open this project.');
+});
+$('projInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; if(!f) return;
+  if(!await resolveUnsavedEdits()){e.target.value='';return;}
+  if(captionProjectDirty&&!confirm('This project has caption or style edits not yet saved to JSON. Open another project and discard those edits?')){e.target.value='';return;}
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      sourceTrackingCache=new Map(Array.isArray(d.sourceTrackingAnalysis)?d.sourceTrackingAnalysis.map(([key,items])=>[String(key),new Map(Array.isArray(items)?items:[])]):[]);
+      $('trackingSmoothness').value=String(Math.max(0,Math.min(100,Number.isFinite(Number(d.trackingSmoothness))?Number(d.trackingSmoothness):55)));$('trackingSmoothnessValue').textContent=$('trackingSmoothness').value+'%';
+      const usedIds=new Set();
+      clips=(d.clips||[]).map((c,i)=>{
+        let id=c.id||newClipId();if(usedIds.has(id))id=newClipId();usedIds.add(id);
+        const track=Array.isArray(c.track)?c.track:[],trackingValidated=!!c.trackingValidated&&track.length>=2&&Number(track[0].t)<=Number(c.start)+.01&&Number(track[track.length-1].t)>=Number(c.end)-.01&&track.every(p=>Number.isFinite(Number(p.cx))&&Number.isFinite(Number(p.cy)));
+        return {
+        ...c,id,number:Number.isInteger(c.number)?c.number:i+1,
+        name:c.name||('Clip '+String(i+1).padStart(3,'0')),sourceName:c.sourceName||d.sourceName||sourceName,
+        keys:Array.isArray(c.keys)?c.keys:[],track,
+        reviewed:!!c.reviewed,exportStatus:c.exportStatus||'not-exported',batchSelected:!!c.batchSelected,
+        favorite:!!c.favorite,thumbnail:c.thumbnail||'',captions:Array.isArray(c.captions)?c.captions.filter(cap=>cap&&typeof cap==='object').map(cap=>({...cap,id:cap.id||newClipId(),start:Number.isFinite(Number(cap.start))?Number(cap.start):0,end:Number.isFinite(Number(cap.end))?Number(cap.end):0,text:String(cap.text||''),speaker:String(cap.speaker||''),reviewed:!!cap.reviewed,words:Array.isArray(cap.words)?cap.words:null})):[],
+        approvalState:['suggested','needs-review','approved','rejected'].includes(c.approvalState)?c.approvalState:'needs-review',approvedAt:c.approvedAt||null,rejectedAt:c.rejectedAt||null,creationMethod:c.creationMethod||'manual',exportOutdated:!!c.exportOutdated,
+        sourceIdentity:c.sourceIdentity||d.sourceIdentity||'',trackingStatus:trackingValidated&&c.trackingStatus==='ready'?'ready':c.trackingStatus==='in-progress'?'needs-review':(['queued','waiting-target','ready','needs-review','failed'].includes(c.trackingStatus)?c.trackingStatus:((track.length)?'needs-review':'waiting-target')),trackingProgress:Number(c.trackingProgress)||0,trackingValidated,trackingError:String(c.trackingError||''),trackingTargetId:String(c.trackingTargetId||''),trackingRevision:Number(c.trackingRevision)||0,smoothness:Number.isFinite(c.smoothness)?c.smoothness:null,reviewPlaybackComplete:!!c.reviewPlaybackComplete,reviewPlaybackProgress:Number(c.reviewPlaybackProgress)||0
+      };});
+      sourceTranscript=Array.isArray(d.sourceTranscript)?d.sourceTranscript.filter(cue=>cue&&Number.isFinite(Number(cue.start))&&Number.isFinite(Number(cue.end))&&Number(cue.end)>Number(cue.start)).map(cue=>({...cue,start:Number(cue.start),end:Number(cue.end),text:String(cue.text||''),id:cue.id||newClipId()})):[];transcriptSourceName=d.transcriptSourceName||'';transcriptFileName=d.transcriptFileName||'';
+      $('transcriptStatus').textContent=sourceTranscript.length?'Project transcript: '+transcriptFileName+' · '+sourceTranscript.length+' cue(s), source: '+transcriptSourceName+'.':'No transcript is saved in this project.';
+      captionStyle={...defaultCaptionStyle,...(d.captionStyle||{})};customCaptionPresets=d.customCaptionPresets||{};
+      captionProjectDirty=false;captionUndo=[];captionRedo=[];
+      Object.entries(customCaptionPresets).forEach(([name,style])=>{if(!Array.from($('captionPreset').options).some(o=>o.value===name)){const o=document.createElement('option');o.textContent=name;o.value=name;$('captionPreset').appendChild(o);}});
+      sel=clips.length?0:-1;
+      if(d.sourceName && d.sourceName !== sourceName) log('Warning: project was for "' + d.sourceName + '" but current video is "' + (sourceName||'none') + '". Times may not match — reopen the original video first.');
+      if(curClip())loadClipToUI(curClip());
+      renderClips();clips.filter(c=>!c.trackingValidated).forEach(queueClipTracking);log('Project opened: '+clips.length+' clips. Reopen the matching source video if it is not loaded.');
+    }catch(err){ alert('Could not read that project file.'); }
+  };
+  r.readAsText(f);
+});
+$('transcriptInput').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  if(!sourceName||!video.videoWidth||!Number.isFinite(video.duration)){ $('transcriptStatus').textContent='Load the matching source video before importing its transcript.';e.target.value='';return; }
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=parseSubtitleText(reader.result),inRange=parsed.filter(cue=>cue.start<video.duration).map(cue=>({...cue,end:Math.min(cue.end,video.duration)})).filter(cue=>cue.end>cue.start);
+      if(!inRange.length)throw new Error('No timed captions fall within the loaded video duration.');
+      sourceTranscript=inRange;transcriptSourceName=sourceName;transcriptFileName=file.name;captionProjectDirty=true;
+      const excluded=parsed.length-inRange.length;$('transcriptStatus').textContent='Loaded '+inRange.length+' timed transcript cue(s) from '+file.name+'. Source times are preserved; no semantic ranking or speech recognition was performed.'+(excluded?' '+excluded+' cue(s) outside the video were ignored.':'');
+    }catch(err){sourceTranscript=[];transcriptSourceName='';transcriptFileName='';$('transcriptStatus').textContent='Could not use this transcript: '+err.message;}
+  };
+  reader.onerror=()=>{$('transcriptStatus').textContent='The selected transcript file could not be read.';};reader.readAsText(file);
+});
+$('generateSuggestions').addEventListener('click',async()=>{if(!await resolveUnsavedEdits())return;createTranscriptSuggestions();});
+
+let whisperPipe=null, whisperLoadPromise=null, whisperAudioGraph=null, whisperTranscribing=false;
+let transformersModule=null, transformersLoadPromise=null;
+async function getTransformersModule(){
+  if(transformersModule) return transformersModule;
+  if(!transformersLoadPromise) transformersLoadPromise=(async()=>{
+    const attempts=[
+      async()=>{ const mod=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1/+esm'); if(!mod.pipeline) throw new Error('ESM build has no pipeline export.'); return mod; },
+      async()=>{ await loadScript('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1/dist/transformers.min.js'); if(!window.transformers || !window.transformers.pipeline) throw new Error('Classic script loaded but no transformers global.'); return window.transformers; },
+      async()=>{ await loadScript('https://unpkg.com/@xenova/transformers@2.17.1/dist/transformers.min.js'); if(!window.transformers || !window.transformers.pipeline) throw new Error('Unpkg script loaded but no transformers global.'); return window.transformers; }
+    ];
+    let lastErr=null;
+    for(const attempt of attempts){
+      try{ transformersModule=await attempt(); return transformersModule; }
+      catch(err){ lastErr=err; log('Whisper loader attempt failed: '+err.message); }
+    }
+    throw new Error('Whisper could not be downloaded. Check you are online, and open the downloaded file in Chrome directly (not in a preview panel inside another app), then try again. If you are offline, Whisper cannot run the first time. Last error: '+(lastErr&&lastErr.message?lastErr.message:'unknown'));
+  })().catch(err=>{transformersLoadPromise=null; throw err;});
+  return transformersLoadPromise;
+}
+async function loadWhisperPipe(){
+  if(whisperPipe) return whisperPipe;
+  if(!whisperLoadPromise) whisperLoadPromise=(async()=>{
+    $('captionStatus').textContent='First time only: downloading the Whisper model (about 75 MB). Your video is not uploaded - it will run in this tab once downloaded.';
+    const mod=await getTransformersModule();
+    whisperPipe=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{progress_callback:(p)=>{
+      if(p && p.status==='progress' && p.file) $('captionStatus').textContent='Downloading Whisper model... '+p.file.split('/').pop()+' '+Math.round((p.progress||0)*100)+'%';
+      else if(p && p.status==='done') $('captionStatus').textContent='Whisper model ready. Transcribing...';
+    }});
+    return whisperPipe;
+  })().catch(err=>{whisperLoadPromise=null; throw err;});
+  return whisperLoadPromise;
+}
+function resampleTo16k(channelData, sampleRate){
+  if(sampleRate===16000) return channelData;
+  const ratio=sampleRate/16000, outLen=Math.floor(channelData.length/ratio), out=new Float32Array(outLen);
+  for(let i=0;i<outLen;i++){ const pos=i*ratio, i0=Math.floor(pos), frac=pos-i0; const a=channelData[i0]||0, b=channelData[Math.min(i0+1, channelData.length-1)]||0; out[i]=a+(b-a)*frac; }
+  return out;
+}
+function monoFromBuffer(buf){
+  if(buf.numberOfChannels===1) return buf.getChannelData(0);
+  const left=buf.getChannelData(0), right=buf.getChannelData(1), out=new Float32Array(left.length);
+  for(let i=0;i<left.length;i++) out[i]=(left[i]+right[i])/2;
+  return out;
+}
+async function decodeClipAudio(clip){
+  const resp=await fetch(video.src);
+  const ab=await resp.arrayBuffer();
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  try{
+    const buf=await ctx.decodeAudioData(ab);
+    const mono=monoFromBuffer(buf);
+    const startSample=Math.floor(clip.start*buf.sampleRate), endSample=Math.min(mono.length, Math.ceil(clip.end*buf.sampleRate));
+    if(endSample<=startSample) throw new Error('Clip audio is empty.');
+    return resampleTo16k(mono.slice(startSample, endSample), buf.sampleRate);
+  } finally { try{await ctx.close();}catch(e){} }
+}
+async function captureClipAudio(clip){
+  const Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx) throw new Error('This browser cannot capture audio.');
+  if(!whisperAudioGraph){
+    const ctx=new Ctx();
+    const source=ctx.createMediaElementSource(video);
+    const dest=ctx.createMediaStreamDestination();
+    source.connect(ctx.destination);
+    source.connect(dest);
+    whisperAudioGraph={ctx, dest};
+  }
+  const graph=whisperAudioGraph;
+  await graph.ctx.resume();
+  const mime=['audio/webm;codecs=opus','audio/webm',''].find(m=>!m||(window.MediaRecorder && MediaRecorder.isTypeSupported(m)))||'';
+  const rec=new MediaRecorder(graph.dest.stream, mime?{mimeType:mime}:undefined);
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data && e.data.size) chunks.push(e.data);};
+  const done=new Promise((resolve,reject)=>{
+    rec.onstop=resolve; rec.onerror=()=>reject(new Error('Audio capture failed.'));
+  });
+  video.pause(); video.muted=false; video.volume=1; video.currentTime=clip.start;
+  await new Promise(res=>{ const h=()=>{video.removeEventListener('seeked',h); res();}; video.addEventListener('seeked',h); setTimeout(res, 2000); });
+  rec.start();
+  try{ await video.play(); }catch(e){}
+  await new Promise(res=>{
+    const check=()=>{ if(video.currentTime>=clip.end || video.paused){ res(); } else { setTimeout(check, 100); } };
+    check();
+  });
+  video.pause();
+  if(rec.state!=='inactive') rec.stop();
+  await done;
+  const blob=new Blob(chunks, {type: rec.mimeType || 'audio/webm'});
+  if(blob.size<1000) throw new Error('No audio was captured from this clip. Check the clip has sound and the tab is not muted.');
+  const ab=await blob.arrayBuffer();
+  const ctx2=new Ctx();
+  try{
+    const buf=await ctx2.decodeAudioData(ab);
+    return resampleTo16k(monoFromBuffer(buf), buf.sampleRate);
+  } finally { try{await ctx2.close();}catch(e){} }
+}
+function whisperChunksToCaptions(result, clip){
+  const chunks=[];
+  if(result && Array.isArray(result.chunks)){
+    for(const ch of result.chunks){
+      let s=null, e=null;
+      if(Array.isArray(ch.timestamp)){ s=ch.timestamp[0]; e=ch.timestamp[1]; }
+      else if(Number.isFinite(ch.start)){ s=ch.start; e=ch.end; }
+      const text=String(ch.text||'').trim();
+      if(text && Number.isFinite(s) && Number.isFinite(e) && e>s) chunks.push({start: clip.start+s, end: clip.start+e, text});
+    }
+  }
+  if(!chunks.length && result && String(result.text||'').trim()){
+    chunks.push({start: clip.start, end: clip.end, text: String(result.text).trim()});
+  }
+  return chunks;
+}
+async function generateCaptionsForClip(forAutopilot=false){
+  if(whisperTranscribing) return 'busy';
+  const c=curClip();
+  if(!c){ if(!forAutopilot) alert('Open or add a clip before generating captions.'); return 'no-clip'; }
+  if(!video.src){ $('captionStatus').textContent='Load the source video first (open the same video file), then try Generate Captions again.'; return 'no-video'; }
+  const clipStart=rangeIsValid()?editRange.start:c.start, clipEnd=rangeIsValid()?editRange.end:c.end;
+  const clip={start: clipStart, end: clipEnd};
+  const existing=currentCaptions().filter(cap=>String(cap.text||'').trim());
+  if(existing.length && forAutopilot) return 'skipped';
+  if(existing.length && !confirm('This clip already has '+existing.length+' caption(s). Replace them with the new transcription? Choose Cancel to keep the existing captions.')) return 'cancelled';
+  const btn=$('generateCaptions');
+  whisperTranscribing=true; btn.disabled=true; btn.textContent='Transcribing...';
+  try{
+    $('captionStatus').textContent='Getting the audio for this clip...';
+    let audio;
+    const longSource=(video.duration||0)>1800;
+    try{
+      audio = longSource ? await captureClipAudio(clip) : await decodeClipAudio(clip);
+    } catch(err){
+      if(!longSource){ $('captionStatus').textContent='Could not read the audio directly, trying play-and-listen...'; audio=await captureClipAudio(clip); }
+      else throw err;
+    }
+    if(!audio || audio.length<8000){ $('captionStatus').textContent='No speech was found in this clip, or the clip has no audio. No captions were added.'; return 'no-audio'; }
+    $('captionStatus').textContent='Transcribing in this tab... This takes a while on a long clip. Keep this tab in front.';
+    const pipe=await loadWhisperPipe();
+    const result=await pipe(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+    const found=whisperChunksToCaptions(result, clip).map(ch=>({id:newClipId(), start:Math.max(clip.start, Math.min(clip.end-0.1, ch.start)), end:Math.max(ch.start+0.2, Math.min(clip.end, ch.end)), text:ch.text, speaker:'', reviewed:false, style:null, words:null})).filter(ch=>ch.end>ch.start);
+    if(!found.length){ $('captionStatus').textContent='Transcription finished, but no speech was found in this clip. No captions were added.'; return 'no-audio'; }
+    recordCaptionUndo();
+    c.captions=found;
+    selectedCaptionId=found[0].id;
+    captionProjectDirty=true;
+    markClipEdited(c);
+    updateCaptionEditor();
+    drawPreview();
+    $('captionStatus').textContent='Done: '+found.length+' caption(s) added from the clip audio. Read through them and fix any words Whisper got wrong, then Save Project.';
+    log('Generate Captions: '+found.length+' caption(s) added for '+c.name+' by local Whisper (tiny.en). No audio was uploaded.');
+    return 'done';
+  } catch(err){
+    console.error(err);
+    $('captionStatus').textContent='Caption generation failed: '+(err && err.message ? err.message : 'unknown error')+'. Check you are online the first time (for the model download), you are using Chrome, and the source video is loaded. Your existing captions were not changed.';
+    return 'failed';
+  } finally {
+    whisperTranscribing=false; btn.disabled=false; btn.textContent='Generate Captions';
+  }
+}
+$('generateCaptions').addEventListener('click', ()=>generateCaptionsForClip(false));
+let autopilotRunning=false, autopilotStopRequested=false;
+function autopilotSetStatus(msg){ const el=$('autopilotStatus'); if(el) el.textContent=msg; }
+function autopilotSleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function autopilotEnsurePerson(clip){
+  if(selectedAnchor && trackingTargetId) return true;
+  if(!video.videoWidth) return false;
+  const times=[clip.start, clip.start+2, clip.start+5].filter(t=>t<=clip.end);
+  for(const t of times){
+    if(autopilotStopRequested) return false;
+    try{
+      video.pause();
+      await seekTo(t);
+      const model=await loadCoco();
+      const off=document.createElement('canvas'), scale=Math.min(1,640/video.videoWidth);
+      off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
+      off.getContext('2d').drawImage(video,0,0,off.width,off.height);
+      const preds=await model.detect(off);
+      const people=preds.filter(p=>p.class==='person'&&p.score>0.5).map(p=>({x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score}));
+      candidates=sortPeopleLeftToRight(people);
+      if(!candidates.length) continue;
+      let best=0, bestScore=-1;
+      candidates.forEach((p,i)=>{ const cx=p.x+p.w/2, centreDist=Math.abs(cx-video.videoWidth/2)/video.videoWidth; const score=(p.w*p.h)/(1+centreDist); if(score>bestScore){bestScore=score;best=i;} });
+      selectCandidate(best);
+      autopilotSetStatus('Autopilot picked Person '+(best+1)+' (largest, most central) for tracking. If that is the wrong person, stop autopilot, click the right person, and start again.');
+      log('Autopilot picked Person '+(best+1)+' as the tracking target.');
+      return true;
+    }catch(err){ log('Autopilot person check failed at '+fmtFull(t)+': '+err.message); }
+  }
+  return false;
+}
+async function autopilotWaitForTracking(c){
+  let stalledMs=0;
+  while(autopilotRunning && !autopilotStopRequested){
+    if(c.trackingValidated && (c.trackingStatus==='ready'||c.trackingStatus==='needs-review')) return true;
+    if(c.trackingStatus==='failed') return false;
+    if(activeExportIds.size){ await autopilotSleep(500); continue; }
+    if(!trackingQueueRunning && c.trackingStatus!=='queued' && c.trackingStatus!=='in-progress') return false;
+    if(!trackingQueueRunning && (c.trackingStatus==='queued' || c.trackingStatus==='in-progress')){
+      stalledMs+=500;
+      if(stalledMs>10000) return false;
+    } else {
+      stalledMs=0;
+    }
+    autopilotSetStatus('Tracking '+c.name+'... '+ (c.trackingProgress||0) +'%');
+    await autopilotSleep(500);
+  }
+  return false;
+}
+async function autopilotRun(list, opts){
+  if(autopilotRunning) return;
+  const skipCaptions=opts && opts.skipCaptions;
+  if(!video.videoWidth){ autopilotSetStatus('Load a video first, then press Start Autopilot.'); return; }
+  if(!list.length){ autopilotSetStatus('No clips to run. Add a clip first, then press Start Autopilot.'); return; }
+  if(activeExportIds.size){ autopilotSetStatus('An export is running. Wait for it to finish, then press Start Autopilot.'); return; }
+  autopilotRunning=true; autopilotStopRequested=false;
+  $('autopilotAll').disabled=true; $('autopilotOne').disabled=true; $('autopilotStop').disabled=false;
+  let doneCount=0, failedCount=0;
+  try{
+    for(let n=0;n<list.length;n++){
+      if(autopilotStopRequested) break;
+      const c=list[n];
+      if(!clips.includes(c)) continue;
+      loadClipToUI(c);
+      autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+'): '+c.name+' — finding the person to follow...');
+      let trackingOk=false, trackingSkipped=false;
+      const personOk=await autopilotEnsurePerson(c);
+      if(autopilotStopRequested) break;
+      if(!personOk){
+        trackingSkipped=true;
+        autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+'): '+c.name+' — no person found, tracking skipped. Captions will still run.');
+        log('Autopilot skipped tracking for '+c.name+': no person found.');
+      } else if(c.trackingValidated && (c.trackingStatus==='ready'||c.trackingStatus==='needs-review')){
+        trackingOk=true;
+      } else if(c.trackingStatus==='in-progress' || (c.trackingStatus==='queued' && trackingQueue.includes(c.id))){
+        trackingOk=await autopilotWaitForTracking(c);
+      } else {
+        queueClipTracking(c);
+        trackingOk=await autopilotWaitForTracking(c);
+        if(!trackingOk && c.trackingStatus==='queued' && !trackingQueue.includes(c.id)){
+          queueClipTracking(c);
+          trackingOk=await autopilotWaitForTracking(c);
+        }
+      }
+      if(autopilotStopRequested) break;
+      if(!trackingSkipped && !trackingOk){ failedCount++; log('Autopilot tracking did not finish for '+c.name+'. Captions will still run.'); }
+      const existing=(c.captions||[]).filter(cap=>String(cap.text||'').trim());
+      let captionResult='skipped';
+      if(skipCaptions){
+        captionResult='skipped (captions off)';
+        autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+'): '+c.name+' — captions off, as you chose.');
+      } else if(existing.length){
+        autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+'): '+c.name+' — captions already there, skipped.');
+      } else {
+        autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+'): '+c.name+' — making captions with local Whisper. Keep this tab open.');
+        captionResult=await generateCaptionsForClip(true);
+      }
+      if(autopilotStopRequested) break;
+      renderClips();
+      doneCount++;
+      autopilotSetStatus('Autopilot ('+(n+1)+' of '+list.length+') done: '+c.name+' — tracking '+(trackingSkipped?'skipped':(trackingOk?'ready':'failed'))+', captions '+captionResult+'.');
+      log('Autopilot finished '+c.name+': tracking '+(trackingSkipped?'skipped':(trackingOk?'ready':'failed'))+', captions '+captionResult+'.');
+      await autopilotSleep(300);
+    }
+  } finally {
+    autopilotRunning=false;
+    $('autopilotAll').disabled=false; $('autopilotOne').disabled=false; $('autopilotStop').disabled=true;
+  }
+  if(autopilotStopRequested){
+    autopilotSetStatus('Autopilot stopped. Clips already finished stay finished. Press Start again to continue the rest.');
+    log('Autopilot stopped by user after '+doneCount+' clip(s).');
+  } else {
+    autopilotSetStatus('Autopilot finished: '+doneCount+' clip(s) done'+(failedCount?' ('+failedCount+' with tracking trouble)':'')+'. Tick the clips you want, then press Save Picked Clips.');
+    log('Autopilot finished: '+doneCount+' clip(s).');
+  }
+}
+$('autopilotAll').addEventListener('click', ()=>autopilotRun(clips.slice()));
+$('autopilotOne').addEventListener('click', ()=>{
+  const c=curClip();
+  if(!c){ autopilotSetStatus('Open a clip first, then press Start Autopilot — This Clip Only.'); return; }
+  autopilotRun([c]);
+});
+$('autopilotStop').addEventListener('click', ()=>{
+  autopilotStopRequested=true; trackStop=true; trackingQueue=[];
+  autopilotSetStatus('Stopping autopilot after the current step finishes...');
+});
+let autoFindRunning=false, autoFindLastSource='';
+function audioWindowsForSamples(samples, startTime){
+  const windows=[], win=16000*10;
+  for(let i=0;i<samples.length;i+=win){
+    const slice=samples.slice(i, Math.min(samples.length, i+win));
+    let sum=0; for(let k=0;k<slice.length;k++) sum+=slice[k]*slice[k];
+    windows.push({start:startTime+i/16000, end:startTime+slice.length/16000, rms:Math.sqrt(sum/Math.max(1,slice.length))});
+  }
+  return windows;
+}
+function rankCandidatesByActivity(candidates, cues, audioWindows, topN){
+  const scored=candidates.map(cand=>{
+    const dur=Math.max(1, cand.end-cand.start);
+    const inside=cues.filter(cue=>cue.start>=cand.start && cue.end<=cand.end);
+    const words=inside.reduce((n,cue)=>n+String(cue.text||'').trim().split(/\s+/).filter(Boolean).length, 0);
+    const speakTime=inside.reduce((n,cue)=>n+Math.max(0, cue.end-cue.start), 0);
+    const density=words/dur, speakRatio=speakTime/dur;
+    const wins=(audioWindows||[]).filter(w=>w.end>cand.start && w.start<cand.end);
+    const rms=wins.length?wins.reduce((n,w)=>n+w.rms,0)/wins.length:0;
+    return {...cand, words, density, speakRatio, rms};
+  });
+  const norm=(v, arr)=>{ const mn=Math.min(...arr), mx=Math.max(...arr); return mx>mn?(v-mn)/(mx-mn):0.5; };
+  const densities=scored.map(c=>c.density), ratios=scored.map(c=>c.speakRatio), rmss=scored.map(c=>c.rms);
+  scored.forEach(c=>{
+    const hasRms=(audioWindows||[]).length>0;
+    c.activityScore=hasRms ? (0.5*norm(c.density, densities)+0.3*norm(c.speakRatio, ratios)+0.2*norm(c.rms, rmss)) : (0.6*norm(c.density, densities)+0.4*norm(c.speakRatio, ratios));
+  });
+  const ranked=scored.slice().sort((a,b)=>b.activityScore-a.activityScore);
+  const picked=ranked.slice(0, Math.max(1, topN||5));
+  return picked.sort((a,b)=>a.start-b.start);
+}
+let whisperPipeMulti=null, whisperLoadMultiPromise=null;
+async function loadWhisperPipeMulti(){
+  if(whisperPipeMulti) return whisperPipeMulti;
+  if(!whisperLoadMultiPromise) whisperLoadMultiPromise=(async()=>{
+    autopilotSetStatus('First model heard nothing. Trying the multilingual Whisper model (downloads once, about 75 MB)...');
+    const mod=await getTransformersModule();
+    whisperPipeMulti=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-tiny',{progress_callback:(p)=>{
+      if(p && p.status==='progress' && p.file) autopilotSetStatus('Downloading multilingual Whisper model... '+p.file.split('/').pop()+' '+Math.round((p.progress||0)*100)+'%');
+    }});
+    return whisperPipeMulti;
+  })().catch(err=>{whisperLoadMultiPromise=null; throw err;});
+  return whisperLoadMultiPromise;
+}
+function audioStatsForSamples(samples){
+  let sum=0, max=0;
+  for(let i=0;i<samples.length;i++){ const a=Math.abs(samples[i]); if(a>max) max=a; sum+=samples[i]*samples[i]; }
+  return {rms:Math.sqrt(sum/Math.max(1,samples.length)), max, samples:samples.length};
+}
+let whisperPipeBase=null, whisperLoadBasePromise=null;
+async function loadWhisperPipeBase(){
+  if(whisperPipeBase) return whisperPipeBase;
+  if(!whisperLoadBasePromise) whisperLoadBasePromise=(async()=>{
+    autopilotSetStatus('Tiny models heard nothing. Trying a larger, more accurate Whisper model (downloads once, larger than tiny, slower)...');
+    const mod=await getTransformersModule();
+    whisperPipeBase=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-base.en',{progress_callback:(p)=>{
+      if(p && p.status==='progress' && p.file) autopilotSetStatus('Downloading larger Whisper model... '+p.file.split('/').pop()+' '+Math.round((p.progress||0)*100)+'%');
+    }});
+    return whisperPipeBase;
+  })().catch(err=>{whisperLoadBasePromise=null; throw err;});
+  return whisperLoadBasePromise;
+}
+async function transcribeAudioWithFallback(audio, range, label){
+  const pipe=await loadWhisperPipe();
+  let result=await pipe(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+  let found=whisperChunksToCaptions(result, range);
+  log('Whisper (English tiny) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+(result&&result.text?result.text.length:0)+' characters, '+found.length+' usable captions.');
+  if(found.length) return found;
+  try{
+    const pipeMulti=await loadWhisperPipeMulti();
+    result=await pipeMulti(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (multilingual tiny) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+(result&&result.text?result.text.length:0)+' characters, '+found.length+' usable captions.');
+    if(found.length){ autopilotSetStatus('The multilingual model heard speech in '+label+'. Continuing with that model.'); return found; }
+  }catch(err){ log('Multilingual Whisper fallback failed for '+label+': '+err.message); }
+  if(isAutoFindFast()){ log('Fast mode on: skipping larger base/small models for '+label+'.'); return found; }
+  try{
+    const pipeBase=await loadWhisperPipeBase();
+    result=await pipeBase(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (English base, larger) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+(result&&result.text?result.text.length:0)+' characters, '+found.length+' usable captions.');
+    if(found.length){ autopilotSetStatus('The larger Whisper model heard speech in '+label+'. Continuing with that model.'); return found; }
+  }catch(err){ log('Larger Whisper fallback failed for '+label+': '+err.message); }
+  try{
+    const pipeSmall=await loadWhisperPipeSmall();
+    result=await pipeSmall(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (English small, even larger) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+(result&&result.text?result.text.length:0)+' characters, '+found.length+' usable captions.');
+    if(found.length) autopilotSetStatus('The even larger Whisper small model heard speech in '+label+'. Continuing with that model.');
+    return found;
+  }catch(err){ log('Whisper small fallback failed for '+label+': '+err.message); return found; }
+}
+async function transcribeAudioWithTinyModels(audio, range, label){
+  const pipe=await loadWhisperPipe();
+  let result=await pipe(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+  let found=whisperChunksToCaptions(result, range);
+  log('Whisper (English tiny) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+found.length+' usable captions.');
+  if(found.length) return found;
+  try{
+    const pipeMulti=await loadWhisperPipeMulti();
+    result=await pipeMulti(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (multilingual tiny) for '+label+': '+(result&&result.chunks?result.chunks.length:0)+' chunks, '+found.length+' usable captions.');
+    return found;
+  }catch(err){ log('Multilingual Whisper fallback failed for '+label+': '+err.message); return found; }
+}
+async function transcribeAudioWithLargeModels(audio, range, label){
+  let found=[];
+  try{
+    const pipeBase=await loadWhisperPipeBase();
+    let result=await pipeBase(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (English base) for '+label+': '+found.length+' usable captions.');
+    if(found.length) return found;
+  }catch(err){ log('Whisper base failed for '+label+': '+err.message); }
+  try{
+    const pipeSmall=await loadWhisperPipeSmall();
+    let result=await pipeSmall(audio, {chunk_length_s:30, stride_length_s:5, return_timestamps:true, language:'en', task:'transcribe'});
+    found=whisperChunksToCaptions(result, range);
+    log('Whisper (English small) for '+label+': '+found.length+' usable captions.');
+    return found;
+  }catch(err){ log('Whisper small failed for '+label+': '+err.message); return found; }
+}
+let whisperPipeSmall=null, whisperLoadSmallPromise=null;
+async function loadWhisperPipeSmall(){
+  if(whisperPipeSmall) return whisperPipeSmall;
+  if(!whisperLoadSmallPromise) whisperLoadSmallPromise=(async()=>{
+    autopilotSetStatus('Base model heard nothing either. Trying Whisper small — even larger and slower, downloads once, much larger than tiny. This is the last speech model tried here; singing with music often still returns nothing, even for small.');
+    const mod=await getTransformersModule();
+    whisperPipeSmall=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-small.en',{progress_callback:(p)=>{
+      if(p && p.status==='progress' && p.file) autopilotSetStatus('Downloading Whisper small model... '+p.file.split('/').pop()+' '+Math.round((p.progress||0)*100)+'%');
+    }});
+    return whisperPipeSmall;
+  })().catch(err=>{whisperLoadSmallPromise=null; throw err;});
+  return whisperLoadSmallPromise;
+}
+function getAutoFindSkipSeconds(){
+  const el=$('autoFindSkipMinutes');
+  const mins=el ? parseFloat(el.value)||0 : 0;
+  return Math.max(0, Math.min(video.duration||0, mins*60));
+}
+function isAutoFindFast(){
+  const el=$('autoFindFast');
+  return el ? el.checked : false;
+}
+async function transcribeWholeVideoForAutoFind(){
+  const fullDuration=video.duration||0;
+  const skipStart=getAutoFindSkipSeconds();
+  const duration=fullDuration-skipStart;
+  const pipe=await loadWhisperPipe();
+  const cues=[], audioWindows=[];
+  let audioStatsTotal={rms:0, max:0, samples:0, silentSections:0, sections:0};
+  if(duration<=600){
+    if(skipStart>0) log('Auto-find skipping first '+Math.round(skipStart)+'s (singing intro), starting at '+fmt(skipStart)+'.');
+    autopilotSetStatus('Auto-find: listening to the whole video with local Whisper... This is the slow part. Keep this tab open.');
+    const audio=await decodeClipAudio({start:skipStart, end:fullDuration});
+    if(!audio || audio.length<8000) return {cues, audioWindows, audioStatsTotal};
+    const stats=audioStatsForSamples(audio);
+    audioStatsTotal={rms:stats.rms, max:stats.max, samples:stats.samples, silentSections:stats.rms<0.001?1:0, sections:1};
+    log('Auto-find audio (whole video): '+Math.round(duration)+'s, '+stats.samples+' samples, loudness RMS '+stats.rms.toFixed(4)+', peak '+stats.max.toFixed(3)+'. RMS below 0.001 means silence.');
+    if(stats.rms<0.001){ log('Auto-find audio is silent. Skipping Whisper. Check the video has sound and is not muted.'); return {cues, audioWindows, audioStatsTotal}; }
+    audioWindows.push(...audioWindowsForSamples(audio, skipStart));
+    const found=await transcribeAudioWithFallback(audio, {start:skipStart, end:fullDuration}, 'whole video');
+    found.forEach((ch,i)=>cues.push({id:'transcript-'+(i+1), start:ch.start, end:ch.end, text:ch.text}));
+    return {cues, audioWindows, audioStatsTotal};
+  }
+  const segLen=300, segCount=Math.ceil(duration/segLen);
+  if(skipStart>0) log('Auto-find skipping first '+Math.round(skipStart)+'s (singing intro), starting at '+fmt(skipStart)+'.');
+  const noSpeechSegments=[];
+  for(let s=0;s<segCount;s++){
+    if(autopilotStopRequested) break;
+    const segStart=skipStart+s*segLen, segEnd=Math.min(fullDuration, segStart+segLen);
+    autopilotSetStatus('Auto-find: listening to section '+(s+1)+' of '+segCount+' ('+fmt(segStart)+' to '+fmt(segEnd)+'). This plays in real time, so a long video takes a while. Keep this tab open.');
+    let audio=null;
+    try{ audio=await captureClipAudio({start:segStart, end:segEnd}); }catch(err){ log('Auto-find could not listen to section '+(s+1)+': '+err.message); continue; }
+    if(!audio || audio.length<8000) continue;
+    const segStats=audioStatsForSamples(audio);
+    audioStatsTotal.sections++; audioStatsTotal.samples+=segStats.samples; audioStatsTotal.max=Math.max(audioStatsTotal.max, segStats.max);
+    if(segStats.rms<0.001) audioStatsTotal.silentSections++;
+    log('Auto-find audio section '+(s+1)+': RMS '+segStats.rms.toFixed(4)+', peak '+segStats.max.toFixed(3)+'.');
+    if(segStats.rms<0.001){ log('Auto-find section '+(s+1)+' is silent. Skipping Whisper for that section.'); continue; }
+    audioWindows.push(...audioWindowsForSamples(audio, segStart));
+    if(autopilotStopRequested) break;
+    autopilotSetStatus('Auto-find: transcribing section '+(s+1)+' of '+segCount+' with the tiny models first...');
+    const found=await transcribeAudioWithTinyModels(audio, {start:segStart, end:segEnd}, 'section '+(s+1));
+    if(!found.length) noSpeechSegments.push({segStart, segEnd});
+    found.forEach(ch=>cues.push({id:'transcript-'+(cues.length+1), start:ch.start, end:ch.end, text:ch.text}));
+  }
+  if(cues.length){
+    log('Talking was found with the tiny models, so the larger base/small models were skipped for the singing/no-speech sections. This keeps a long video much faster.');
+  } else if(isAutoFindFast()){
+    log('Fast mode on: skipping larger-model retry for all no-speech sections.');
+  } else if(!autopilotStopRequested && noSpeechSegments.length){
+    autopilotSetStatus('No talking was found with the tiny models anywhere. Trying the larger base/small models on those sections as a last try. This is slower — keep this tab open.');
+    for(const seg of noSpeechSegments){
+      if(autopilotStopRequested) break;
+      autopilotSetStatus('Auto-find (larger models): listening again to '+fmt(seg.segStart)+' to '+fmt(seg.segEnd)+'...');
+      let audio=null;
+      try{ audio=await captureClipAudio({start:seg.segStart, end:seg.segEnd}); }catch(err){ log('Larger-model retry could not listen to '+fmt(seg.segStart)+': '+err.message); continue; }
+      if(!audio || audio.length<8000) continue;
+      const found=await transcribeAudioWithLargeModels(audio, {start:seg.segStart, end:seg.segEnd}, 'section '+fmt(seg.segStart));
+      found.forEach(ch=>cues.push({id:'transcript-'+(cues.length+1), start:ch.start, end:ch.end, text:ch.text}));
+    }
+  }
+  if(audioStatsTotal.sections) audioStatsTotal.rms=audioWindows.length?audioWindows.reduce((n,w)=>n+w.rms,0)/audioWindows.length:0;
+  return {cues, audioWindows, audioStatsTotal};
+}
+async function autoFindClips(){
+  if(autoFindRunning) return;
+  if(autopilotRunning){ autopilotSetStatus('Autopilot is already running. Wait for it to finish, then press Find Clips From This Video Now.'); return; }
+  if(!video.videoWidth || !sourceName){ autopilotSetStatus('Load a video first, then press Find Clips From This Video Now.'); return; }
+  autoFindRunning=true; autopilotStopRequested=false; autoFindLastSource=sourceIdentity;
+  $('autopilotAll').disabled=true; $('autopilotOne').disabled=true; $('autoFindNow').disabled=true; $('autopilotStop').disabled=false;
+  try{
+    autopilotSetStatus('Auto-find started: listening to the whole video with local Whisper. First time only, the model downloads once (about 75 MB).');
+    const foundData=await transcribeWholeVideoForAutoFind();
+    const cues=foundData.cues, audioWindows=foundData.audioWindows, stats=foundData.audioStatsTotal||{};
+    if(autopilotStopRequested && !cues.length){
+      autopilotSetStatus('Auto-find stopped. No clips were made. Press Find Clips From This Video Now to try again.');
+      return;
+    }
+    if(!cues.length){
+      if(stats.sections && stats.silentSections===stats.sections){
+        autopilotSetStatus('Auto-find heard silence, not speech. The audio it captured was silent (loudness near zero). Check the video plays with sound, the tab is not muted, and the video is not muted, then press Test My Audio.');
+      } else {
+        autopilotSetStatus('Auto-find finished, but no speech was found in this video, even though the audio was not silent (loudness RMS '+(stats.rms!==undefined?stats.rms.toFixed(4):'unknown')+'). Whisper tried tiny, base, and small models, and all returned no words. If this video is singing/music, that is expected — Whisper is built for talking, not singing. Press Find Loudest Clips to make clips from the loudest parts, with no captions needed. No speech clips were made.');
+      }
+      $('transcriptStatus').textContent='No speech was found in this video, so no suggested clips could be made. See the Autopilot status above for whether the audio was silent or Whisper heard nothing.';
+      return;
+    }
+    sourceTranscript=cues; transcriptSourceName=sourceName;
+    $('transcriptStatus').textContent='Whisper found '+cues.length+' spoken parts. Finding the most active 2-minute clips...';
+    const allCandidates=buildTranscriptCandidates(cues, {target:120, min:90, max:150, sourceDuration:video.duration});
+    const topN=Math.max(1, Math.min(20, parseInt($('autoFindCount').value)||5));
+    const ranked=rankCandidatesByActivity(allCandidates, cues, audioWindows, topN);
+    const wantCaptions=$('autoFindCaptions') ? $('autoFindCaptions').checked : true;
+    const beforeCount=clips.length;
+    const added=createTranscriptSuggestions({target:120, min:90, max:150, candidates:ranked, withCaptions:wantCaptions});
+    if(!added){
+      autopilotSetStatus('Auto-find heard speech, but no 2-minute clips could be made, or they were all duplicates of clips you already have. Try a different video, or uncheck Avoid duplicate moments in Auto Clipper.');
+      return;
+    }
+    const newClips=clips.slice(beforeCount, beforeCount+added);
+    autopilotSetStatus('Auto-find made '+added+' suggested clip(s) with the most activity. Now clipping those scenes'+(wantCaptions?' and adding captions':' (no captions, as you chose)')+' — you can walk away.');
+    await autopilotRun(newClips, {skipCaptions:!wantCaptions});
+    if(autopilotStopRequested){
+      autopilotSetStatus('Auto-find stopped. Clips already finished stay finished. Tick the clips you want, then press Save Picked Clips, or Save Picked Without Captions.');
+    } else {
+      autopilotSetStatus('Auto-find finished: '+added+' clip(s) clipped'+(wantCaptions?' and captioned':'')+'. Tick the clips you want, then press Save Picked Clips, or Save Picked Without Captions.');
+    }
+  } catch(err){
+    console.error(err);
+    autopilotSetStatus('Auto-find failed: '+(err && err.message ? err.message : 'unknown error')+'. Your existing clips were not removed. Try again with a shorter video first, and check you are online the first time for the model download.');
+  } finally {
+    autoFindRunning=false;
+    $('autopilotAll').disabled=false; $('autopilotOne').disabled=false; $('autoFindNow').disabled=false; $('autopilotStop').disabled=true;
+  }
+}
+$('autoFindNow').addEventListener('click', autoFindClips);
+async function testAutoFindAudio(){
+  if(!video.videoWidth || !sourceName){ autopilotSetStatus('Load a video first, then press Test My Audio.'); return; }
+  const btn=$('autoFindTestAudio'); btn.disabled=true;
+  try{
+    const testEnd=Math.min(video.duration||0, 10);
+    autopilotSetStatus('Audio test: getting the first '+testEnd.toFixed(0)+' seconds...');
+    let audio=null;
+    if((video.duration||0)<=600){ audio=await decodeClipAudio({start:0, end:testEnd}); }
+    else { audio=await captureClipAudio({start:0, end:testEnd}); }
+    if(!audio || audio.length<8000){ autopilotSetStatus('Audio test: no audio was found in the first '+testEnd.toFixed(0)+' seconds. Check the video has sound.'); return; }
+    const stats=audioStatsForSamples(audio);
+    log('Audio test: '+testEnd.toFixed(0)+'s, loudness RMS '+stats.rms.toFixed(4)+', peak '+stats.max.toFixed(3)+'.');
+    if(stats.rms<0.001){ autopilotSetStatus('Audio test: the first '+testEnd.toFixed(0)+' seconds are silent (loudness near zero). The video may be muted, or this part may have no sound. Try a part with talking, and check the tab is not muted.'); return; }
+    autopilotSetStatus('Audio test: audio is loud enough (RMS '+stats.rms.toFixed(4)+'). Transcribing the test...');
+    const found=await transcribeAudioWithFallback(audio, {start:0, end:testEnd}, 'audio test');
+    if(found.length){
+      autopilotSetStatus('Audio test heard: "'+found.map(c=>c.text).join(' ').slice(0,200)+'" — so Whisper can hear this video. If the full auto-find still says no speech, tell me this test result.');
+    } else {
+      autopilotSetStatus('Audio test: audio was loud (RMS '+stats.rms.toFixed(4)+'), but Whisper heard no words in 10 seconds, even after trying tiny, base, and small models. If the first 10 seconds are singing or music, that is expected — Whisper is built for talking, not singing, and singing with music behind it often returns nothing. If talking starts later in the video, try Find Clips From This Video Now for the whole video. If you want clips of the singing/music itself, press Find Loudest Clips — it makes clips from the loudest parts, with no captions needed.');
+    }
+  } catch(err){
+    autopilotSetStatus('Audio test failed: '+(err && err.message ? err.message : 'unknown error'));
+  } finally { btn.disabled=false; }
+}
+$('autoFindTestAudio').addEventListener('click', testAutoFindAudio);
+function buildLoudnessCandidates(audioWindows, duration, topN, startOffset){
+  const target=120, min=90, max=150;
+  const startAt=startOffset||0;
+  const endAt=startAt+duration;
+  if(!duration || !audioWindows.length) return [];
+  const maxRms=Math.max(...audioWindows.map(w=>w.rms), 0.001);
+  const chunks=[];
+  if(duration<=max){ chunks.push({start:startAt, end:endAt}); }
+  else { for(let s=startAt; s<endAt; s+=target){ chunks.push({start:s, end:Math.min(endAt, s+target)}); } }
+  const scored=chunks.filter(c=>c.end-c.start>=Math.min(min, duration)).map(c=>{
+    const inside=audioWindows.filter(w=>w.start>=c.start && w.start<c.end);
+    const avg=inside.length?inside.reduce((n,w)=>n+w.rms,0)/inside.length:0;
+    return {start:c.start, end:c.end, cues:[], activityScore:avg/maxRms, avgRms:avg};
+  });
+  scored.sort((a,b)=>b.avgRms-a.avgRms);
+  const picked=scored.slice(0, Math.max(1, topN)).sort((a,b)=>a.start-b.start);
+  return picked;
+}
+function createLoudnessClips(candidates){
+  if(!video.videoWidth||!sourceName) return 0;
+  const avoid=$('avoidDuplicates').checked; let added=0, skipped=0;
+  const vertical=$('prepareVertical') ? $('prepareVertical').checked : true;
+  for(const item of candidates){
+    const duration=item.end-item.start;
+    if(avoid&&clips.some(c=>c.sourceName===sourceName&&Math.min(c.end,item.end)-Math.max(c.start,item.start)>=Math.min(c.end-c.start,duration)*.8)){skipped++;continue;}
+    const n=Math.max(0,...clips.map(c=>c.number||0))+1;
+    const c={id:newClipId(),number:n,name:'Suggested moment '+String(n).padStart(3,'0'),sourceName,start:item.start,end:item.end,
+      outW:vertical?1080:(parseInt($('outW').value)||1080),outH:vertical?1920:(parseInt($('outH').value)||1920),keys:[],track:[],
+      captions:[], reviewed:false,approvalState:'suggested',approvedAt:null,rejectedAt:null,creationMethod:'auto-loudness',sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:trackingTargetId||'',
+      suggestionRationale:'Loudest audio section — singing/music, no speech found. Made from loudness, not speech, so no captions. Loudness score '+Math.round((item.activityScore||0)*100)+'/100.',
+      exportStatus:'not-exported',exportOutdated:false,batchSelected:false,favorite:false};
+    clips.push(c); added++;
+  }
+  captionProjectDirty=captionProjectDirty||added>0;
+  if(added){const created=clips.slice(-added);created.forEach(queueClipTracking);if(sel<0){sel=clips.indexOf(created[0]);loadClipToUI(curClip());}renderClips();}
+  $('transcriptStatus').textContent=added+' loudest clip(s) added for review, with no captions.'+(skipped?' '+skipped+' duplicate moment(s) skipped.':'');
+  log('Loudness clips created '+added+'; '+skipped+' duplicate(s) skipped. No speech was used.');
+  return added;
+}
+async function findLoudestClips(){
+  if(!video.videoWidth || !sourceName){ autopilotSetStatus('Load a video first, then press Find Loudest Clips.'); return; }
+  autopilotStopRequested=false;
+  const btn=$('autoFindLoudest'); btn.disabled=true;
+  try{
+    const fullDuration=video.duration||0;
+    const skipStart=getAutoFindSkipSeconds();
+    const duration=fullDuration-skipStart;
+    autopilotSetStatus('Finding loudest parts: listening to the audio loudness only, no Whisper, no captions. Keep this tab open.');
+    let audioWindows=[];
+    if(duration<=600){
+      const audio=await decodeClipAudio({start:skipStart, end:fullDuration});
+      if(audio) audioWindows.push(...audioWindowsForSamples(audio, skipStart));
+    } else {
+      const segCount=Math.ceil(duration/300);
+      for(let s=0; s<segCount; s++){
+        const segStart=skipStart+s*300, segEnd=Math.min(fullDuration, segStart+300);
+        try{ const audio=await captureClipAudio({start:segStart, end:segEnd}); if(audio) audioWindows.push(...audioWindowsForSamples(audio, segStart)); }catch(err){ log('Loudest clips could not listen to section '+(s+1)+': '+err.message); }
+        if(autopilotStopRequested) break;
+      }
+    }
+    if(!audioWindows.length){ autopilotSetStatus('Could not measure any audio loudness in this video. Check the video has sound.'); return; }
+    const topN=Math.max(1, Math.min(20, parseInt($('autoFindCount').value)||5));
+    const candidates=buildLoudnessCandidates(audioWindows, duration, topN, skipStart);
+    if(!candidates.length){ autopilotSetStatus('No loud sections were found to make clips from.'); return; }
+    const beforeCount=clips.length;
+    const added=createLoudnessClips(candidates);
+    if(!added){ autopilotSetStatus('Loudest sections were found, but they were all duplicates of clips you already have.'); return; }
+    const newClips=clips.slice(beforeCount, beforeCount+added);
+    autopilotSetStatus('Made '+added+' loudest clip(s) with no captions — these are for singing/music sections. Now clipping those scenes for tracking. When they are ready, pick the ones you want and press Save Picked Clips or Save Picked Without Captions.');
+    await autopilotRun(newClips, {skipCaptions:true});
+  } catch(err){
+    autopilotSetStatus('Find Loudest Clips failed: '+(err && err.message ? err.message : 'unknown error'));
+  } finally { btn.disabled=false; }
+}
+$('autoFindLoudest').addEventListener('click', findLoudestClips);
+// ---- MercyCut v2: movement clips, no captions, no transcript, no prompt ----
+(function hideV2UnneededCards(){
+  document.querySelectorAll('.card').forEach(card=>{
+    const h=card.querySelector('h3');
+    if(h && /Autopilot — walk away|Auto Clipper — transcript suggestions|^Captions$/.test(h.textContent.trim())) card.style.display='none';
+  });
+})();
+function buildMovementCandidates(samples, startAt, endAt, topN){
+  const target=120, min=90, max=150;
+  const chunks=[];
+  if(endAt-startAt<=max){ chunks.push({start:startAt, end:endAt}); }
+  else { for(let s=startAt; s<endAt; s+=target){ chunks.push({start:s, end:Math.min(endAt, s+target)}); } }
+  const W=video.videoWidth||1, H=video.videoHeight||1;
+  const scored=chunks.filter(c=>c.end-c.start>=Math.min(min, endAt-startAt)).map(c=>{
+    const inside=samples.filter(s=>s.cx!==null && s.t>=c.start && s.t<c.end).sort((a,b)=>a.t-b.t);
+    let total=0, moving=0;
+    for(let i=1;i<inside.length;i++){
+      const dx=(inside[i].cx-inside[i-1].cx)/W, dy=(inside[i].cy-inside[i-1].cy)/H;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d>=0.02){ total+=d; moving++; }
+    }
+    const dur=Math.max(1, c.end-c.start);
+    return {start:c.start, end:c.end, cues:[], activityScore:total, movementPerSecond:total/dur, movingSamples:moving, sampleCount:inside.length};
+  });
+  scored.sort((a,b)=>b.activityScore-a.activityScore);
+  const maxScore=Math.max(...scored.map(s=>s.activityScore), 0.001);
+  scored.forEach(s=>{ s.activityScoreNorm=s.activityScore/maxScore; });
+  return scored.slice(0, Math.max(1, topN)).sort((a,b)=>a.start-b.start);
+}
+function createMovementClips(candidates){
+  if(!video.videoWidth||!sourceName) return 0;
+  const avoid=$('avoidDuplicates') ? $('avoidDuplicates').checked : false; let added=0, skipped=0;
+  const vertical=$('prepareVertical') ? $('prepareVertical').checked : true;
+  for(const item of candidates){
+    const duration=item.end-item.start;
+    if(avoid&&clips.some(c=>c.sourceName===sourceName&&Math.min(c.end,item.end)-Math.max(c.start,item.start)>=Math.min(c.end-c.start,duration)*.8)){skipped++;continue;}
+    const n=Math.max(0,...clips.map(c=>c.number||0))+1;
+    const c={id:newClipId(),number:n,name:'Suggested moment '+String(n).padStart(3,'0'),sourceName,start:item.start,end:item.end,
+      outW:vertical?1080:(parseInt($('outW').value)||1080),outH:vertical?1920:(parseInt($('outH').value)||1920),keys:[],track:[],
+      captions:[], reviewed:false,approvalState:'suggested',approvedAt:null,rejectedAt:null,creationMethod:'auto-movement',sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:trackingTargetId||'',smoothness:($('movementSmoothness') ? parseInt($('movementSmoothness').value)||70 : 70),
+      suggestionRationale:'Best movement: person moved the most in this window. Movement score '+item.activityScore.toFixed(2)+' (filtered, frame-normalised), '+item.movingSamples+' moving samples out of '+item.sampleCount+'. No captions, no sound used.',
+      exportStatus:'not-exported',exportOutdated:false,batchSelected:false,favorite:false};
+    clips.push(c); added++;
+  }
+  captionProjectDirty=captionProjectDirty||added>0;
+  if(added){const created=clips.slice(-added);created.forEach(queueClipTracking);if(sel<0){sel=clips.indexOf(created[0]);loadClipToUI(curClip());}renderClips();}
+  log('Movement clips created '+added+'; '+skipped+' duplicate(s) skipped. No captions, no transcript.');
+  return added;
+}
+let movementRunning=false;
+async function findBestMovementClips(){
+  if(movementRunning) return;
+  if(autopilotRunning){ $('movementStatus').textContent='Tracking is already running. Wait for it to finish, then press Find Best Movement Clips.'; return; }
+  if(!video.videoWidth || !sourceName){ $('movementStatus').textContent='Load a video first, then pick a person, then press Find Best Movement Clips.'; return; }
+  movementRunning=true; autopilotStopRequested=false;
+  $('movementFind').disabled=true; $('movementStop').disabled=false;
+  try{
+    const fullDuration=video.duration||0;
+    const skipMinutes=parseFloat($('movementSkipMinutes').value)||0;
+    const skipStart=Math.max(0, Math.min(fullDuration, skipMinutes*60));
+    const sampleInterval=parseFloat($('movementSample').value)||5;
+    const topN=Math.max(1, Math.min(20, parseInt($('movementCount').value)||5));
+    $('movementStatus').textContent='Finding people and checking movement. First use downloads the person model. Keep this tab open.';
+    await loadCoco();
+    if(!selectedAnchor || !trackingTargetId){
+      video.pause(); await seekTo(skipStart);
+      const off=document.createElement('canvas'), scale=Math.min(1,512/video.videoWidth);
+      off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
+      off.getContext('2d').drawImage(video,0,0,off.width,off.height);
+      const preds=await cocoModel.detect(off);
+      const people=preds.filter(p=>p.class==='person'&&p.score>0.5).map(p=>({x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score}));
+      candidates=sortPeopleLeftToRight(people);
+      if(!candidates.length){ $('movementStatus').textContent='No person found at the start. Scrub to a clearer moment, click the person to follow, then try again.'; return; }
+      let best=0, bestScore=-1;
+      candidates.forEach((p,i)=>{ const cx=p.x+p.w/2, centreDist=Math.abs(cx-video.videoWidth/2)/video.videoWidth; const score=(p.w*p.h)/(1+centreDist); if(score>bestScore){bestScore=score;best=i;} });
+      selectCandidate(best);
+      $('movementStatus').textContent='Picked Person '+(best+1)+' (largest, most central) to follow. If that is the wrong person, stop, click the right person, and start again.';
+    }
+    let prevAnchor={cx:selectedAnchor.cx, cy:selectedAnchor.cy};
+    const samples=[];
+    const times=[];
+    for(let t=skipStart; t<fullDuration; t+=sampleInterval) times.push(t);
+    if(!times.length) times.push(skipStart);
+    for(let idx=0; idx<times.length; idx++){
+      if(autopilotStopRequested) break;
+      const t=times[idx];
+      $('movementStatus').textContent='Checking movement: sample '+(idx+1)+' of '+times.length+' at '+fmt(t)+'. Person followed: Person '+(selectedPersonNumber||'?')+'. Press Stop to end here.';
+      try{
+        video.pause(); await seekTo(t);
+        const off=document.createElement('canvas'), scale=Math.min(1,512/video.videoWidth);
+        off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
+        off.getContext('2d').drawImage(video,0,0,off.width,off.height);
+        const preds=await cocoModel.detect(off);
+        const people=preds.filter(p=>p.class==='person'&&p.score>0.5).map(p=>({x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score}));
+        let matched=null;
+        if(people.length){
+          let bestD=Infinity;
+          people.forEach(p=>{ const cx=p.x+p.w/2, cy=p.y+p.h/2; const d=Math.sqrt(Math.pow((cx-prevAnchor.cx)/video.videoWidth,2)+Math.pow((cy-prevAnchor.cy)/video.videoHeight,2)); if(d<bestD){bestD=d;matched={cx,cy};} });
+          if(bestD>0.45) matched=null;
+        }
+        if(matched){ samples.push({t, cx:matched.cx, cy:matched.cy}); prevAnchor=matched; }
+        else { samples.push({t, cx:null, cy:null}); }
+      }catch(err){ log('Movement sample failed at '+fmt(t)+': '+err.message); samples.push({t, cx:null, cy:null}); }
+    }
+    if(autopilotStopRequested && samples.filter(s=>s.cx!==null).length<3){
+      $('movementStatus').textContent='Movement search stopped. Not enough movement samples to make clips. Try again with a longer video or a clearer person.'; return;
+    }
+    const candidatesMove=buildMovementCandidates(samples, skipStart, fullDuration, topN);
+    const withMovement=candidatesMove.filter(c=>c.activityScore>0);
+    if(!withMovement.length){
+      $('movementStatus').textContent='No clear movement was found. The person may have been still, or was not found in most samples. Try a video where the person moves more, or pick a different person.';
+      return;
+    }
+    const beforeCount=clips.length;
+    const added=createMovementClips(withMovement);
+    if(!added){ $('movementStatus').textContent='Best movement windows were found, but they were all duplicates of clips you already have.'; return; }
+    const newClips=clips.slice(beforeCount, beforeCount+added);
+    $('movementStatus').textContent='Found '+added+' best movement clip(s), about 2 minutes each. Now tracking the person in each one automatically — no captions. Wait for tracking to finish, then tick the clips you want and press Save Picked Clips.';
+    await autopilotRun(newClips, {skipCaptions:true});
+    $('movementStatus').textContent='Tracking done for '+added+' movement clip(s). Tick the clips you want in My Clips, then press Save Picked Clips. No captions were made — add them somewhere else later if you want them.';
+  }catch(err){
+    $('movementStatus').textContent='Find Best Movement Clips failed: '+(err && err.message ? err.message : 'unknown error');
+  }finally{
+    movementRunning=false; $('movementFind').disabled=false; $('movementStop').disabled=true;
+  }
+}
+$('movementFind').addEventListener('click', findBestMovementClips);
+$('movementStop').addEventListener('click', ()=>{ autopilotStopRequested=true; trackStop=true; $('movementStatus').textContent='Stopping movement search after the current sample...'; });
+function applyMovementPreset(step, size, smooth, label){
+  if($('movementTrackStep')) $('movementTrackStep').value=String(step);
+  if($('movementTrackSize')) $('movementTrackSize').value=String(size);
+  if($('movementSmoothness')) $('movementSmoothness').value=String(smooth);
+  if($('movementSmoothnessValue')) $('movementSmoothnessValue').textContent=smooth+'%';
+  clips.filter(c=>c.creationMethod==='auto-movement').forEach(c=>{ c.smoothness=smooth; });
+  $('movementStatus').textContent=label+' applied: track every '+step+'s, detection size '+size+', smoothness '+smooth+'%. Change these before Find Best Movement Clips, or press Retry Tracking for Clip to re-track clips already made.';
+}
+$('movementPresetFastest').addEventListener('click', ()=>applyMovementPreset(2, 384, 60, 'Fastest'));
+$('movementPresetFastSmooth').addEventListener('click', ()=>applyMovementPreset(1, 512, 70, 'Fast & Smooth'));
+$('movementPresetAccurate').addEventListener('click', ()=>applyMovementPreset(0.5, 640, 55, 'Most Accurate'));
+$('movementPresetSmoothest').addEventListener('click', ()=>applyMovementPreset(1, 512, 85, 'Smoothest'));
+if($('movementSmoothness')) $('movementSmoothness').addEventListener('input', ()=>{
+  const v=parseInt($('movementSmoothness').value)||70;
+  if($('movementSmoothnessValue')) $('movementSmoothnessValue').textContent=v+'%';
+  clips.filter(c=>c.creationMethod==='auto-movement').forEach(c=>{ c.smoothness=v; });
+});
+$('captionZoom').addEventListener('input',updateCaptionEditor);
+$('captionTrack').addEventListener('click',e=>{if(e.target!==$('captionTrack')&&e.target.className!=='captionTrackPlayhead')return;const r=$('captionTrack').getBoundingClientRect(),t=captionTrackView.start+(e.clientX-r.left)/Math.max(1,r.width)*(captionTrackView.end-captionTrackView.start);video.currentTime=Math.max(0,Math.min(video.duration||0,t));});
+$('addCaption').addEventListener('click',addCaptionAtPlayhead);
+$('saveCaption').addEventListener('click',()=>{saveCaptionDraft(true,true);captionInputUndoStarted=false;});
+for(const id of ['captionText','captionStart','captionEnd','captionSpeaker','captionReviewed'])$(id).addEventListener('input',syncCaptionInputDraft);
+for(const id of ['captionText','captionStart','captionEnd','captionSpeaker','captionReviewed'])$(id).addEventListener('change',()=>{saveCaptionDraft(false,false);captionInputUndoStarted=false;});
+$('deleteCaption').addEventListener('click',()=>{const c=curClip(),i=currentCaptions().findIndex(x=>x.id===selectedCaptionId);if(i<0)return;recordCaptionUndo();currentCaptions().splice(i,1);selectedCaptionId=null;captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();drawPreview();});
+$('splitCaption').addEventListener('click',splitSelectedCaption);
+$('mergeCaption').addEventListener('click',mergeSelectedCaption);
+$('captionText').addEventListener('input',()=>{captionProjectDirty=true;});
+for(const id of ['captionStart','captionEnd','captionSpeaker','captionReviewed'])$(id).addEventListener('input',()=>{captionProjectDirty=true;});
+$('undoCaption').addEventListener('click',()=>{if(captionUndo.length)restoreCaptionSnapshot(captionUndo,captionRedo);});
+$('redoCaption').addEventListener('click',()=>{if(captionRedo.length)restoreCaptionSnapshot(captionRedo,captionUndo);});
+$('previewCaption').addEventListener('click',async()=>{const cap=currentCaptions().find(x=>x.id===selectedCaptionId);if(!cap)return;previewingClip=false;if($('outputPreview').style.display==='none')$('toggleOutput').click();await seekTo(cap.start);captionPreviewUntil=cap.end;video.play();});
+$('captionBrandColor').addEventListener('change',()=>{$('captionColor').value=$('captionBrandColor').value;captionStyleDraft=captionStyleFromControls();$('captionPreset').value='Custom';drawPreview();});
+$('captionColor').addEventListener('input',()=>{$('captionBrandColor').value=Array.from($('captionBrandColor').options).some(o=>o.value===$('captionColor').value)?$('captionColor').value:'';});
+for(const id of ['captionFont','captionSize','captionWeight','captionAlign','captionMaxLines','captionLineSpacing','captionPadding','captionRounded','captionColor','captionHighlight','captionOutline','captionOutlineWidth','captionBackground','captionOpacity','captionPosition','captionBgOn','captionWordHighlight'])$(id).addEventListener('input',()=>{captionStyleDraft=captionStyleFromControls();$('captionPreset').value='Custom';drawPreview();});
+$('captionPreset').addEventListener('change',()=>{const name=$('captionPreset').value;setCaptionStyleControls(customCaptionPresets[name]||captionPresetStyle(name));drawPreview();});
+$('applyCaptionStyle').addEventListener('click',()=>{const cap=currentCaptions().find(x=>x.id===selectedCaptionId),c=curClip();if(!cap||!c){captionStyle={...captionStyleDraft};captionProjectDirty=true;return;}recordCaptionUndo();cap.style={...captionStyleDraft};captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();drawPreview();});
+$('applyCaptionStyleAll').addEventListener('click',()=>{const c=curClip();if(!c||!currentCaptions().length)return;recordCaptionUndo();currentCaptions().forEach(cap=>cap.style={...captionStyleDraft});captionStyle={...captionStyleDraft};captionProjectDirty=true;markClipEdited(c);updateCaptionEditor();drawPreview();});
+$('restoreCaptionStyle').addEventListener('click',()=>{captionStyle={...defaultCaptionStyle};captionStyleDraft={...defaultCaptionStyle};captionProjectDirty=true;const cap=currentCaptions().find(x=>x.id===selectedCaptionId);if(cap){recordCaptionUndo();cap.style=null;markClipEdited(curClip());}setCaptionStyleControls(captionStyleDraft);$('captionPreset').value='House of Mercy Classic';updateCaptionEditor();drawPreview();});
+$('saveCaptionPreset').addEventListener('click',()=>{const name=prompt('Name this custom caption style');if(!name||!name.trim())return;customCaptionPresets[name.trim()]={...captionStyleDraft};captionProjectDirty=true;let option=Array.from($('captionPreset').options).find(o=>o.value===name.trim());if(!option){option=document.createElement('option');option.value=name.trim();option.textContent=name.trim();$('captionPreset').appendChild(option);}$('captionPreset').value=name.trim();captionStyle={...captionStyleDraft};});
+
+window.addEventListener('keydown',e=>{
+  if(e.target&&['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+  if(e.key==='s'||e.key==='S'){e.preventDefault();setRangeBoundary('start',video.currentTime);}
+  else if(e.key==='e'||e.key==='E'){e.preventDefault();setRangeBoundary('end',video.currentTime);}
+  else if(e.code==='Space'){e.preventDefault();$('playBtn').click();}
+});
+window.addEventListener('beforeunload',e=>{if(rangeIsDirty()||captionProjectDirty){e.preventDefault();e.returnValue='';}});
+updateRangeUI();
+
+// Keep preview fresh while playing
+setInterval(() => { if(!video.paused) drawPreview(); }, 100);
+</script>
+</body>
+</html>
