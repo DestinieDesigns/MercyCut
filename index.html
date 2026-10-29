@@ -168,6 +168,7 @@
         <p style="font-size:0.9em">Fastest = fewest checks, quickest, crop may jump a bit. Fast &amp; Smooth = the balanced default. Most Accurate = checks every 0.5 seconds at full size, slowest, most precise. Smoothest = very smooth crop, but may lag a little if the person walks fast. Export itself is still real-time in a browser — a 2-minute clip takes about 2 minutes to save — that part cannot be sped up here without a different export tool.</p>
         <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
         <div class="row"><button id="movementFind">Find Best Movement Clips</button><button id="movementStop" disabled>Stop Movement Search</button></div>
+        <div id="movementEstimate" class="captionStatus" aria-live="polite">Load a video to see time estimates. Estimates update when you change any option above.</div>
         <div id="movementStatus" class="captionStatus" aria-live="polite">Load a video, pick a person, then press Find Best Movement Clips. Clips will be about 2 minutes long (90 to 150 seconds).</div>
       </div>
       <div class="card">
@@ -2034,6 +2035,44 @@ function createMovementClips(candidates){
   log('Movement clips created '+added+'; '+skipped+' duplicate(s) skipped. No captions, no transcript.');
   return added;
 }
+function fmtDuration(sec){
+  sec=Math.max(0, Math.round(sec));
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  return h>0 ? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
+}
+function perDetectSeconds(size){
+  if(size<=384) return 0.3;
+  if(size<=512) return 0.5;
+  return 0.8;
+}
+function updateMovementEstimate(){
+  const el=$('movementEstimate');
+  if(!el) return;
+  if(!video.videoWidth || !video.duration){
+    el.textContent='Load a video to see time estimates. Estimates update when you change any option above.';
+    return;
+  }
+  const fullDuration=video.duration||0;
+  const skipMinutes=parseFloat($('movementSkipMinutes') ? $('movementSkipMinutes').value : 0)||0;
+  const skipStart=Math.max(0, Math.min(fullDuration, skipMinutes*60));
+  const usable=Math.max(0, fullDuration-skipStart);
+  const sampleInterval=parseFloat($('movementSample') ? $('movementSample').value : 5)||5;
+  const sampleCount=Math.max(1, Math.ceil(usable/sampleInterval));
+  const movementEst=sampleCount*0.5;
+  const topN=Math.max(1, Math.min(20, parseInt($('movementCount') ? $('movementCount').value : 5)||5));
+  const trackStep=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
+  const trackSize=parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512)||512;
+  const trackingSamplesPerClip=Math.ceil(120/trackStep);
+  const trackingEst=topN*trackingSamplesPerClip*perDetectSeconds(trackSize);
+  const exportEst=topN*120;
+  const total=movementEst+trackingEst+exportEst;
+  el.textContent='Estimated time for this video ('+fmtDuration(fullDuration)+' long, skipping '+fmtDuration(skipStart)+'): Movement search ~'+fmtDuration(movementEst)+' ('+sampleCount+' samples) + Tracking ~'+fmtDuration(trackingEst)+' ('+topN+' clips × ~'+trackingSamplesPerClip+' checks) + Saving all clips ~'+fmtDuration(exportEst)+' (real time, 2 min per clip) = about '+fmtDuration(total)+' if you save all '+topN+' clips. Saving only the clips you tick will be less. These are estimates — your computer speed will change them, and the timer while it runs will adjust to your actual speed.';
+}
+['movementCount','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness'].forEach(id=>{
+  const el=$(id);
+  if(el) el.addEventListener('input', updateMovementEstimate);
+});
+if(video) video.addEventListener('loadedmetadata', updateMovementEstimate);
 let movementRunning=false;
 async function findBestMovementClips(){
   if(movementRunning) return;
@@ -2068,10 +2107,14 @@ async function findBestMovementClips(){
     const times=[];
     for(let t=skipStart; t<fullDuration; t+=sampleInterval) times.push(t);
     if(!times.length) times.push(skipStart);
+    const searchStart=Date.now();
     for(let idx=0; idx<times.length; idx++){
       if(autopilotStopRequested) break;
       const t=times[idx];
-      $('movementStatus').textContent='Checking movement: sample '+(idx+1)+' of '+times.length+' at '+fmt(t)+'. Person followed: Person '+(selectedPersonNumber||'?')+'. Press Stop to end here.';
+      const elapsed=(Date.now()-searchStart)/1000;
+      const avgPerSample=idx>0 ? elapsed/idx : 0.5;
+      const remaining=(times.length-idx)*avgPerSample;
+      $('movementStatus').textContent='Checking movement: sample '+(idx+1)+' of '+times.length+' at '+fmt(t)+'. Person followed: Person '+(selectedPersonNumber||'?')+'. Timer: elapsed '+fmtDuration(elapsed)+', about '+fmtDuration(remaining)+' left for this search (based on your actual speed so far). Press Stop to end here.';
       try{
         video.pause(); await seekTo(t);
         const off=document.createElement('canvas'), scale=Math.min(1,512/video.videoWidth);
@@ -2103,8 +2146,16 @@ async function findBestMovementClips(){
     if(!added){ $('movementStatus').textContent='Best movement windows were found, but they were all duplicates of clips you already have.'; return; }
     const newClips=clips.slice(beforeCount, beforeCount+added);
     $('movementStatus').textContent='Found '+added+' best movement clip(s), about 2 minutes each. Now tracking the person in each one automatically — no captions. Wait for tracking to finish, then tick the clips you want and press Save Picked Clips.';
-    await autopilotRun(newClips, {skipCaptions:true});
-    $('movementStatus').textContent='Tracking done for '+added+' movement clip(s). Tick the clips you want in My Clips, then press Save Picked Clips. No captions were made — add them somewhere else later if you want them.';
+    const trackStart=Date.now();
+    const trackTimer=setInterval(()=>{
+      const elapsed=(Date.now()-trackStart)/1000;
+      const trackStepNow=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
+      const trackSizeNow=parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512)||512;
+      const estTracking=added*Math.ceil(120/trackStepNow)*perDetectSeconds(trackSizeNow);
+      $('movementStatus').textContent='Tracking '+added+' clip(s): timer elapsed '+fmtDuration(elapsed)+', estimated tracking time about '+fmtDuration(estTracking)+' (based on your settings — your computer speed will change it). When tracking is ready, tick the clips you want and press Save Picked Clips.';
+    }, 1000);
+    try{ await autopilotRun(newClips, {skipCaptions:true}); } finally { clearInterval(trackTimer); }
+    $('movementStatus').textContent='Tracking done for '+added+' movement clip(s) in '+fmtDuration((Date.now()-trackStart)/1000)+'. Tick the clips you want in My Clips, then press Save Picked Clips. No captions were made — add them somewhere else later if you want them.';
   }catch(err){
     $('movementStatus').textContent='Find Best Movement Clips failed: '+(err && err.message ? err.message : 'unknown error');
   }finally{
@@ -2119,6 +2170,7 @@ function applyMovementPreset(step, size, smooth, label){
   if($('movementSmoothness')) $('movementSmoothness').value=String(smooth);
   if($('movementSmoothnessValue')) $('movementSmoothnessValue').textContent=smooth+'%';
   clips.filter(c=>c.creationMethod==='auto-movement').forEach(c=>{ c.smoothness=smooth; });
+  updateMovementEstimate();
   $('movementStatus').textContent=label+' applied: track every '+step+'s, detection size '+size+', smoothness '+smooth+'%. Change these before Find Best Movement Clips, or press Retry Tracking for Clip to re-track clips already made.';
 }
 $('movementPresetFastest').addEventListener('click', ()=>applyMovementPreset(2, 384, 60, 'Fastest'));
