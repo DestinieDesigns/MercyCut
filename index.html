@@ -5,23 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MercyCut Web v2 — Movement Clips</title>
 <style>
-  *{box-sizing:border-box} body{margin:0;height:100vh;overflow:hidden;background:#1e1e24;color:#e8e8ec;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;display:flex;flex-direction:column}
-  header{padding:14px 18px;border-bottom:1px solid #444} h1{margin:0 0 4px;font-size:20px} p{margin:4px 0;color:#c9c9d1}
+  *{box-sizing:border-box} body{margin:0;height:100vh;overflow:hidden;background:#1d0a38;color:#fdf6e3;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;display:flex;flex-direction:column}
+  header{padding:14px 18px;border-bottom:4px solid #ffc107;background:linear-gradient(90deg,#4b0082,#2a0a68)} h1{margin:0 0 4px;font-size:20px} p{margin:4px 0;color:#f3e9d2} .homTag{color:#ffd54f;font-weight:800;letter-spacing:.4px}
   .wrap{width:100%;max-width:none;margin:0;padding:10px 14px;flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
   .editorShell{display:grid;grid-template-columns:300px minmax(360px,1.5fr) minmax(300px,1fr);gap:12px;flex:1;min-height:0}
   .clipSidebar,.previewColumn,.controlColumn{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
-  .clipSidebar{display:flex;flex-direction:column;background:#26262e;border:1px solid #3a3a44;border-radius:10px;padding:12px}
+  .clipSidebar{display:flex;flex-direction:column;background:#2a1050;border:1px solid #6a1b9a;border-radius:10px;padding:12px}
   .previewColumn .card,.controlColumn .card{margin-bottom:10px}
   @media(max-width:1100px){.editorShell{grid-template-columns:250px minmax(0,1fr);grid-template-rows:minmax(360px,1fr) minmax(280px,.8fr);overflow-y:auto}.clipSidebar{grid-row:1 / span 2}.previewColumn{grid-column:2;grid-row:1}.controlColumn{grid-column:2;grid-row:2;overflow:visible}}
   @media(max-width:760px){body{height:auto;min-height:100vh;overflow:auto}.wrap{overflow:visible}.editorShell{display:flex;flex-direction:column;overflow:visible}.clipSidebar{max-height:45vh}.previewColumn,.controlColumn{overflow:visible}}
-  button{background:#3a3a44;color:#fff;border:1px solid #55555f;padding:8px 12px;border-radius:6px;cursor:pointer}
-  button:hover{background:#4a4a56} button:disabled{opacity:.5}
-  input,select{background:#2a2a32;color:#fff;border:1px solid #44444e;border-radius:4px;padding:6px}
-  .card{background:#26262e;border:1px solid #3a3a44;border-radius:10px;padding:12px;margin-bottom:12px}
-  #stage{position:relative;background:#000;border:1px solid #444;overflow:hidden;aspect-ratio:16/9}
+  button{background:#6a1b9a;color:#fff;border:1px solid #ffc107;padding:8px 12px;border-radius:6px;cursor:pointer}
+  button:hover{background:#4b0082} button:disabled{opacity:.5}
+  input,select{background:#fff8e7;color:#2a0a68;border:1px solid #ffc107;border-radius:4px;padding:6px}
+  .card{background:#2e1557;border:1px solid #6a1b9a;border-radius:10px;padding:12px;margin-bottom:12px}
+  #stage{position:relative;background:#000;border:2px solid #ffc107;overflow:hidden;aspect-ratio:16/9}
   #stage video{width:100%;height:100%;object-fit:contain;display:block}
-  #cropBox{position:absolute;border:3px solid #c7a45a;box-shadow:0 0 0 9999px rgba(0,0,0,.35);cursor:move;touch-action:none}
-  #cropBox .tag{position:absolute;top:-22px;left:0;background:#c7a45a;color:#000;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
+  #cropBox{position:absolute;border:3px solid #ffc107;box-shadow:0 0 0 9999px rgba(0,0,0,.35);cursor:move;touch-action:none}
+  #cropBox .tag{position:absolute;top:-22px;left:0;background:#ffc107;color:#2a0a68;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
   #candidates{position:absolute;inset:0;pointer-events:none}
   #trackingOverlay{position:absolute;inset:0;pointer-events:none}
   .trackBox{position:absolute;border:3px solid #2ecc71;border-radius:4px}
@@ -30,36 +30,36 @@
   .trackBox span{position:absolute;top:-24px;left:0;background:#2ecc71;color:#000;font-size:14px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
   .trackBox.other span{background:#aaa}
   .trackBox.lost span{background:#e74c3c;color:#fff}
-  .personBox{position:absolute;border:3px solid #2ecc71;border-radius:4px;cursor:pointer;pointer-events:auto}
+  .personBox{position:absolute;border:3px solid #ffc107;border-radius:4px;cursor:pointer;pointer-events:auto}
   .personBox.dim{opacity:.35}
-  .personBox.sel{border-color:#bb86fc;border-width:5px;opacity:1}
-  .personBox span{position:absolute;top:-24px;left:0;background:#2ecc71;color:#000;font-size:16px;font-weight:800;padding:3px 8px;border-radius:5px;white-space:nowrap}
-  .personBox.sel span{background:#bb86fc;color:#160c20}
+  .personBox.sel{border-color:#ffd54f;border-width:5px;opacity:1}
+  .personBox span{position:absolute;top:-24px;left:0;background:#ffc107;color:#2a0a68;font-size:16px;font-weight:800;padding:3px 8px;border-radius:5px;white-space:nowrap}
+  .personBox.sel span{background:#4b0082;color:#ffd54f}
   #personPicker{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .personChoice{min-width:112px;min-height:54px;font-weight:700}
   .personChoice .number{font-size:20px;font-weight:900;margin-right:5px}
-  .personChoice.sel{background:#69418e;border-color:#bb86fc;outline:2px solid #bb86fc}
-  #detectionInfo{min-height:20px;color:#c9c9d1}
-  #trackStatus{font-size:13px;color:#c9c9d1}
+  .personChoice.sel{background:#4b0082;border-color:#ffc107;outline:2px solid #ffc107}
+  #detectionInfo{min-height:20px;color:#f3e9d2}
+  #trackStatus{font-size:13px;color:#f3e9d2}
   .clipSidebar h2{font-size:17px;margin:0 0 8px}.clipTools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
   .clipTools input,.clipTools select{width:100%;min-width:0}.clipList{flex:1;min-height:100px;overflow-y:auto}
-  .clipCard{border:1px solid #454550;border-radius:8px;background:#202027;padding:8px;margin:7px 0;cursor:pointer}
-  .clipCard.selected{border:2px solid #c7a45a;background:#302b20}.clipCard-top{display:flex;gap:7px;align-items:center}
+  .clipCard{border:1px solid #6a1b9a;border-radius:8px;background:#241040;padding:8px;margin:7px 0;cursor:pointer}
+  .clipCard.selected{border:2px solid #ffc107;background:#4b0082}.clipCard-top{display:flex;gap:7px;align-items:center}
   .clipThumb{position:relative;width:94px;height:58px;flex:none;background:#111 center/cover no-repeat;border-radius:5px;border:1px solid #444}
   .clipNumber{position:absolute;left:4px;top:4px;background:#111d;color:#fff;padding:1px 5px;border-radius:4px;font-weight:800}
-  .clipTitle{width:100%;min-width:0}.clipTimes,.clipMeta{font-size:12px;color:#c9c9d1;margin-top:5px}
+  .clipTitle{width:100%;min-width:0}.clipTimes,.clipMeta{font-size:12px;color:#e8dcc0;margin-top:5px}
   .clipActions{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.clipActions button{padding:5px 7px;font-size:12px}.clipActions .reviewClipAction{border-color:#a98724;color:#ffe08a}.clipActions .approveClipAction{border-color:#43875a;color:#9ef0b1}
-  .clipCard:focus-visible{outline:3px solid #e1c16e;outline-offset:2px}.clipMore{position:relative}.clipMore summary{cursor:pointer;padding:5px 8px;list-style:none}.clipMore summary::-webkit-details-marker{display:none}.clipMore[open]{border:1px solid #555;border-radius:6px;padding:4px}.clipMore button{margin:2px}
+  .clipCard:focus-visible{outline:3px solid #ffc107;outline-offset:2px}.clipMore{position:relative}.clipMore summary{cursor:pointer;padding:5px 8px;list-style:none}.clipMore summary::-webkit-details-marker{display:none}.clipMore[open]{border:1px solid #555;border-radius:6px;padding:4px}.clipMore button{margin:2px}
   .clipActions label{display:flex;gap:4px;align-items:center;font-size:12px}
   #appStatus{margin:0;max-height:65px;overflow:auto;flex:none}
-  .clipHelp{font-size:12px;color:#bdbdc6}.clipHelp summary{cursor:pointer;color:#d9d9e0}
+  .clipHelp{font-size:12px;color:#e8dcc0}.clipHelp summary{cursor:pointer;color:#ffd54f}
   .timelinePanel{margin-top:10px;border-top:1px solid #41414b;padding-top:10px}
   #rangeInstruction{min-height:21px;color:#d9d9e0;font-weight:600}
   #timelineWrap{height:58px;position:relative;margin:6px 10px 2px;touch-action:none;user-select:none}
   #timelineTrack{position:absolute;left:0;right:0;top:25px;height:10px;background:#42424d;border-radius:6px;overflow:hidden}
   #outsideBefore,#outsideAfter{position:absolute;top:0;bottom:0;background:#101015aa;pointer-events:none}
   #outsideBefore{left:0}#outsideAfter{right:0}
-  #rangeHighlight{position:absolute;top:0;bottom:0;background:#c7a45a88;border-top:2px solid #dfbf76;border-bottom:2px solid #dfbf76;pointer-events:none}
+  #rangeHighlight{position:absolute;top:0;bottom:0;background:#ffc10788;border-top:2px solid #ffd54f;border-bottom:2px solid #ffd54f;pointer-events:none}
   #slider{position:absolute;inset:0;width:100%;height:58px;margin:0;opacity:.01;z-index:4;cursor:pointer}
   #playhead{position:absolute;top:9px;bottom:6px;width:3px;background:#fff;box-shadow:0 0 0 1px #15151a;z-index:5;pointer-events:none;transform:translateX(-50%)}
   .rangeMarker{position:absolute;top:9px;height:34px;min-width:54px;z-index:7;transform:translateX(-50%);font-weight:800;padding:4px 7px;border:2px solid #fff;border-radius:5px;cursor:ew-resize;touch-action:none}
@@ -68,7 +68,7 @@
   .rangeReadouts{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:700;padding:5px 0}
   .rangeReadouts span:nth-child(1){color:#8ce99e}.rangeReadouts span:nth-child(3){color:#ffc078}
   .timelineControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
-  #addClip,#saveChanges{background:#9a7837;color:#111;font-weight:800;border-color:#e1c16e}
+  #addClip,#saveChanges{background:#ffc107;color:#2a0a68;font-weight:800;border-color:#ffd54f}
   #saveChanges[hidden],#cancelChanges[hidden],#addClip[hidden]{display:none}
   #clipName{max-width:220px}.savedClipLabel{font-weight:700;color:#e1c16e}
   .captionPanel{border:1px solid #484451;background:#24232c;border-radius:8px;padding:10px;margin:8px 0}.captionList{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:5px;margin:8px 0}.captionRow{display:grid;grid-template-columns:1fr auto;gap:6px;border:1px solid #514d5b;border-radius:6px;padding:7px;cursor:pointer}.captionRow.active{border:2px solid #ffc107;background:#302b20}.captionRow small{color:#c9c9d1}.captionRow button{padding:3px 6px}.captionControls{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.captionControls input,.captionControls select{max-width:100%}.captionTrack{height:48px;position:relative;background:#191820;border:1px solid #45414d;border-radius:5px;margin:2px 10px 8px;overflow:hidden}.captionBlock{position:absolute;top:5px;height:36px;min-width:5px;background:#6a1b9a;border:1px solid #d7b5e8;border-radius:4px;color:#fff;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:grab;padding:8px 10px}.captionBlock.selected{background:#4b0082;border:2px solid #ffc107}.captionBlock .captionEdge{position:absolute;top:0;bottom:0;width:6px;background:#ffc107;cursor:ew-resize}.captionBlock .captionEdge.left{left:0}.captionBlock .captionEdge.right{right:0}.captionPreview{font-weight:800;text-align:center;white-space:pre-wrap;line-height:1.12;pointer-events:none;text-shadow:0 1px 2px #111}.captionWords span{display:inline-block;margin-right:.25em}.captionStatus{font-size:12px;color:#ded5eb;min-height:20px}
@@ -78,15 +78,16 @@
   dialog::backdrop{background:#0009}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:16px}
   #outCanvas{background:#000;border:1px solid #444;max-height:320px;max-width:100%}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
-  .row label{color:#c9c9d1} input[type=range]{flex:1}
+  .row label{color:#f3e9d2} input[type=range]{flex:1}
   #log{white-space:pre-wrap;background:#111;border:1px solid #333;border-radius:6px;padding:8px;max-height:140px;overflow:auto;font-size:13px}
-  .clip{padding:8px;border:1px solid #444;border-radius:6px;margin:6px 0;cursor:pointer} .clip.sel{border-color:#c7a45a}
-  progress{width:100%} .warn{color:#ffd54f} .ok{color:#8ce99e}
+  .clip{padding:8px;border:1px solid #444;border-radius:6px;margin:6px 0;cursor:pointer} .clip.sel{border-color:#ffc107}
+  progress{width:100%;accent-color:#ffc107} .warn{color:#ffd54f} .ok{color:#8ce99e}
 </style>
 </head>
 <body>
 <header>
-  <h1>MercyCut Web v2 — Movement Clips</h1><p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
+  <h1>MercyCut Web v2 — Movement Clips</h1>
+  <p class="homTag">ACCI House of Mercy • Worship • Word • Wonder</p><p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
   <p><strong>No Python. No install. No upload.</strong> Open this file in Chrome or Edge, pick a video from your computer, and edit it right in this tab. Your video never leaves this device — there is no server here to send it to.</p>
   <p class="warn">Honest limits, please read: browsers cannot play every format (MP4 works best; MKV and some MOV files may not play). Export runs in real time, so a 60-second clip takes about 60 seconds to export, and you must keep this tab in front while it exports. For very long services, cut short clips first. The desktop version is still faster for 2–3 hour files.</p>
 </header>
