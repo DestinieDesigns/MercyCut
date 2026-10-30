@@ -24,6 +24,7 @@
   #cropBox .tag{position:absolute;top:-22px;left:0;background:#ffc107;color:#2a0a68;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
   #candidates{position:absolute;inset:0;pointer-events:none}
   #trackingOverlay{position:absolute;inset:0;pointer-events:none}
+  #trailCanvas{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
   .trackBox{position:absolute;border:3px solid rgba(46,204,113,.95);border-radius:50%;box-shadow:0 0 28px 10px rgba(46,204,113,.55), inset 0 0 30px rgba(46,204,113,.25);background:radial-gradient(ellipse at center, rgba(46,204,113,.20) 0%, rgba(46,204,113,.06) 60%, transparent 75%)}
   .trackBox.other{border-color:rgba(170,170,170,.8);border-width:2px;opacity:.55;box-shadow:0 0 16px 6px rgba(170,170,170,.35);background:radial-gradient(ellipse at center, rgba(170,170,170,.15) 0%, transparent 70%)}
   .trackBox.lost{border-color:#e74c3c;border-style:dashed;border-width:4px;box-shadow:0 0 28px 10px rgba(231,76,60,.55), inset 0 0 30px rgba(231,76,60,.25);background:radial-gradient(ellipse at center, rgba(231,76,60,.20) 0%, rgba(231,76,60,.06) 60%, transparent 75%)}
@@ -125,6 +126,7 @@
           <video id="video" playsinline preload="metadata"></video>
           <div id="candidates"></div>
           <div id="trackingOverlay"></div>
+          <canvas id="trailCanvas"></canvas>
           <div id="cropBox" style="display:none"><span class="tag">CROP — drag me</span></div>
         </div>
         <div class="row">
@@ -177,8 +179,9 @@
         <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip. If a live Export comes out choppy (about 4 frames a second), press “Export Offline (smooth)” on that clip instead — it renders frame by frame at 30fps, slower to export, but smooth to watch.</p>
         <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
         <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button><button id="movementPresetFinest">Finest (0.1s)</button></div>
-        <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.033">Every frame (0.033s, very slow)</option><option value="0.1">0.1 seconds (very detailed, slow)</option><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
+        <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.033">Every frame (0.033s, very slow)</option><option value="0.1">0.1 seconds (very detailed, slow)</option><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option><option value="5">5 seconds (fastest, beta trail recommended)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
         <div class="row"><label><input type="checkbox" id="showTrackingOverlay" checked> Show tracking live on video (green box = tracking, red dashed box = lost)</label><button id="clearTrackingOverlay">Clear tracking boxes</button></div>
+        <div class="row"><label><input type="checkbox" id="betaMotionTrail"> Beta: Motion trail — faint gold line following direction (tracking view + live export only)</label></div>
         <div id="trackingOverlayInfo" class="captionStatus" aria-live="polite">Tracking boxes will appear on the video while tracking runs. Green = person found, red dashed = lost, holding last position.</div>
         <p style="font-size:0.9em">Fastest = fewest checks, quickest, crop may jump a bit. Fast &amp; Smooth = the balanced default. Most Accurate = checks every 0.5 seconds at full size, slowest, most precise. Smoothest = very smooth crop, but may lag a little if the person walks fast. Export itself is still real-time in a browser — a 2-minute clip takes about 2 minutes to save — that part cannot be sped up here without a different export tool.</p>
         <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
@@ -1077,6 +1080,7 @@ function seekTrackingVideo(v,t){return new Promise((resolve,reject)=>{let done=f
 
 let lastTrackBox={w:0,h:0};
 function clearTrackingOverlay(){
+  clearMotionTrail();
   const el=$('trackingOverlay'); if(el) el.innerHTML='';
   const info=$('trackingOverlayInfo'); if(info) info.textContent='Tracking boxes cleared.';
 }
@@ -1110,7 +1114,58 @@ function renderTrackingOverlay(persons, best, point, t){
     if(info){ info.textContent='LOST at '+fmtFull(t)+' — holding last position. This is where tracking gets lost.'; info.style.color='#ff8a8a'; }
   }
   if(best && info) info.style.color='';
+  drawMotionTrailOnStage();
 }
+
+// --- Beta: Motion trail ---
+let motionTrail=[];
+function betaTrailEnabled(){ return !!($('betaMotionTrail') && $('betaMotionTrail').checked); }
+function pushMotionTrail(t, cx, cy){
+  if(!betaTrailEnabled()) return;
+  motionTrail=motionTrail.filter(p=>t-p.t<=5);
+  motionTrail.push({t,cx,cy});
+  if(motionTrail.length>100) motionTrail=motionTrail.slice(-100);
+}
+function drawMotionTrailOnStage(){
+  const cv=$('trailCanvas'); if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const sr=stage.getBoundingClientRect(); cv.width=Math.max(1,Math.round(sr.width)); cv.height=Math.max(1,Math.round(sr.height));
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!betaTrailEnabled() || motionTrail.length<2 || !video.videoWidth) return;
+  const vr=videoContentRect(), sx=vr.width/video.videoWidth, sy=vr.height/video.videoHeight, ox=vr.left-sr.left, oy=vr.top-sr.top;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(let i=1;i<motionTrail.length;i++){
+    const a=motionTrail[i-1], b=motionTrail[i];
+    const alpha=0.15+0.75*(i/motionTrail.length);
+    ctx.strokeStyle=`rgba(255,193,7,${alpha.toFixed(2)})`; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(ox+a.cx*sx, oy+a.cy*sy); ctx.lineTo(ox+b.cx*sx, oy+b.cy*sy); ctx.stroke();
+  }
+  const last=motionTrail[motionTrail.length-1], prev=motionTrail[motionTrail.length-2];
+  const dx=(last.cx-prev.cx)*sx, dy=(last.cy-prev.cy)*sy, len=Math.hypot(dx,dy)||1;
+  const hx=ox+last.cx*sx, hy=oy+last.cy*sy, ux=dx/len, uy=dy/len;
+  ctx.fillStyle='rgba(255,193,7,0.95)';
+  ctx.beginPath(); ctx.moveTo(hx+ux*12, hy+uy*12); ctx.lineTo(hx-ux*8-uy*6, hy-uy*8+ux*6); ctx.lineTo(hx-ux*8+uy*6, hy-uy*8-ux*6); ctx.closePath(); ctx.fill();
+}
+function drawMotionTrailOnCanvas(ctx, ow, oh, c, currentTime){
+  if(!betaTrailEnabled()) return;
+  const pts=(c.track||[]).filter(p=>p.t<=currentTime && p.t>=currentTime-5 && !p.lost);
+  const centre=cropCenterAt(c, currentTime);
+  if(centre) pts.push({t:currentTime, cx:centre.cx, cy:centre.cy});
+  if(pts.length<2) return;
+  const crop=computeCrop(video.videoWidth, video.videoHeight, ow, oh, centre?centre.cx:null, centre?centre.cy:null);
+  if(crop.fill) return;
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i], alpha=0.15+0.60*(i/pts.length);
+    ctx.strokeStyle=`rgba(255,193,7,${alpha.toFixed(2)})`; ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo((a.cx-crop.x)*(ow/crop.w), (a.cy-crop.y)*(oh/crop.h));
+    ctx.lineTo((b.cx-crop.x)*(ow/crop.w), (b.cy-crop.y)*(oh/crop.h));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function clearMotionTrail(){ motionTrail=[]; const cv=$('trailCanvas'); if(cv){ const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); } }
 async function runAutomaticTracking(c){
   const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...selectedAnchor},sid=c.sourceIdentity||sourceIdentity;
   if(!anchor||!targetId)throw new Error('Select the person to follow once in the source video.');
@@ -1129,14 +1184,14 @@ async function runAutomaticTracking(c){
     if(trackStop)throw new Error('Tracking was cancelled.');
     if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
     const t=times[n],key=t.toFixed(3),cached=cache.get(key);
-    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t);}
+    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t); if(!point.lost) pushMotionTrail(t, point.cx, point.cy);}
     else{
       await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
       const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
       const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.01,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.60&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.50?candidate:null;
       const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
       cache.set(key,point);points.push(point);if(best){last={cx:best.cx,cy:best.cy};lastTrackBox={w:best.w,h:best.h};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;
-      renderTrackingOverlay(persons, best, point, t);
+      renderTrackingOverlay(persons, best, point, t); if(best) pushMotionTrail(t, best.cx, best.cy);
     }
     c.trackingProgress=Math.round((n+1)/times.length*100);
     if(sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
@@ -1390,6 +1445,7 @@ async function exportClipMedia(c,withCaptions=true){
     } else {
       ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ow, oh);
     }
+    drawMotionTrailOnCanvas(ctx,ow,oh,c,video.currentTime);
     if(withCaptions)drawCaptionText(ctx,ow,oh,c,video.currentTime,false);
     if(useManualFrames && vTrack && typeof vTrack.requestFrame === 'function'){ try{ vTrack.requestFrame(); }catch(e){} }
     $('progress').value = Math.round((video.currentTime-c.start)/Math.max(0.1,(c.end-c.start))*100);
