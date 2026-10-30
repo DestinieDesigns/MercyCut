@@ -1174,8 +1174,10 @@ async function exportClipMedia(c,withCaptions=true){
   const ctx = canvas.getContext('2d');
   const fps = 30;
   await seekTo(c.start);
-  video.muted = false; video.play();
-  const vStream = canvas.captureStream(fps);
+  video.muted = false; video.playbackRate = 1; video.play();
+  const useManualFrames = typeof canvas.captureStream === 'function';
+  const vStream = useManualFrames ? canvas.captureStream(0) : canvas.captureStream(fps);
+  const vTrack = vStream.getVideoTracks()[0];
   let tracks = [...vStream.getVideoTracks()], audioCaptured=false;
   try{
     const vs = video.captureStream ? video.captureStream() : null;
@@ -1189,8 +1191,32 @@ async function exportClipMedia(c,withCaptions=true){
   const done = new Promise(res => { rec.onstop = res; });
   rec.start(250);
   log('Exporting ' + c.name + (withCaptions?' with burned-in captions':' without captions')+' in real time… keep this tab in front. Format: ' + (mime || 'browser default'));
-  // Draw loop
+  // Draw loop — one draw per NEW video frame only, not per screen refresh.
+  // Old code drew on requestAnimationFrame while the recorder sampled at 30fps separately,
+  // so when drawing fell behind, the recorder repeated the last canvas frame — the sticking look.
+  // Now: wait for a new video frame (requestVideoFrameCallback if available), draw it once,
+  // and tell the recorder to take exactly that frame (requestFrame if available).
+  let lastDrawnTime = -1;
+  const waitForNextFrame = () => new Promise(res => {
+    let done=false;
+    const finish=()=>{ if(!done){ done=true; res(); } };
+    setTimeout(finish, 500);
+    if(typeof video.requestVideoFrameCallback === 'function'){
+      try{ video.requestVideoFrameCallback(()=>finish()); }catch(e){ requestAnimationFrame(()=>finish()); }
+    } else {
+      requestAnimationFrame(()=>finish());
+    }
+  });
   while(video.currentTime < c.end && !exportStop){
+    if(video.currentTime === lastDrawnTime){
+      await waitForNextFrame();
+      if(video.currentTime === lastDrawnTime && video.currentTime < c.end){
+        // Video frame has not advanced yet (paused, buffering, or tab throttled) — wait again, do not redraw the same frame.
+        await waitForNextFrame();
+      }
+      if(video.currentTime === lastDrawnTime){ if(video.paused && video.currentTime < c.end){ try{ await video.play(); }catch(e){} } continue; }
+    }
+    lastDrawnTime = video.currentTime;
     const centre = cropCenterAt(c, video.currentTime);
     const crop = computeCrop(video.videoWidth, video.videoHeight, ow, oh, centre?centre.cx:null, centre?centre.cy:null);
     if(crop.fill){
@@ -1203,8 +1229,9 @@ async function exportClipMedia(c,withCaptions=true){
       ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ow, oh);
     }
     if(withCaptions)drawCaptionText(ctx,ow,oh,c,video.currentTime,false);
+    if(vTrack && typeof vTrack.requestFrame === 'function'){ try{ vTrack.requestFrame(); }catch(e){} }
     $('progress').value = Math.round((video.currentTime-c.start)/Math.max(0.1,(c.end-c.start))*100);
-    await new Promise(r => requestAnimationFrame(r));
+    await waitForNextFrame();
     if(video.paused && video.currentTime < c.end) video.play();
   }
   video.pause();
