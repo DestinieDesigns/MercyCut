@@ -24,13 +24,13 @@
   #cropBox .tag{position:absolute;top:-22px;left:0;background:#ffc107;color:#2a0a68;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
   #candidates{position:absolute;inset:0;pointer-events:none}
   #trackingOverlay{position:absolute;inset:0;pointer-events:none}
-  .trackBox{position:absolute;border:3px solid #2ecc71;border-radius:4px}
-  .trackBox.other{border-color:#aaa;border-width:2px;opacity:.55}
-  .trackBox.lost{border-color:#e74c3c;border-style:dashed;border-width:4px}
+  .trackBox{position:absolute;border:3px solid rgba(46,204,113,.95);border-radius:50%;box-shadow:0 0 28px 10px rgba(46,204,113,.55), inset 0 0 30px rgba(46,204,113,.25);background:radial-gradient(ellipse at center, rgba(46,204,113,.20) 0%, rgba(46,204,113,.06) 60%, transparent 75%)}
+  .trackBox.other{border-color:rgba(170,170,170,.8);border-width:2px;opacity:.55;box-shadow:0 0 16px 6px rgba(170,170,170,.35);background:radial-gradient(ellipse at center, rgba(170,170,170,.15) 0%, transparent 70%)}
+  .trackBox.lost{border-color:#e74c3c;border-style:dashed;border-width:4px;box-shadow:0 0 28px 10px rgba(231,76,60,.55), inset 0 0 30px rgba(231,76,60,.25);background:radial-gradient(ellipse at center, rgba(231,76,60,.20) 0%, rgba(231,76,60,.06) 60%, transparent 75%)}
   .trackBox span{position:absolute;top:-24px;left:0;background:#2ecc71;color:#000;font-size:14px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
   .trackBox.other span{background:#aaa}
   .trackBox.lost span{background:#e74c3c;color:#fff}
-  .personBox{position:absolute;border:3px solid #ffc107;border-radius:4px;cursor:pointer;pointer-events:auto}
+  .personBox{position:absolute;border:3px solid #ffc107;border-radius:18px;box-shadow:0 0 18px 4px rgba(255,193,7,.45);cursor:pointer;pointer-events:auto}
   .personBox.dim{opacity:.35}
   .personBox.sel{border-color:#ffd54f;border-width:5px;opacity:1}
   .personBox span{position:absolute;top:-24px;left:0;background:#ffc107;color:#2a0a68;font-size:16px;font-weight:800;padding:3px 8px;border-radius:5px;white-space:nowrap}
@@ -1297,9 +1297,10 @@ async function exportClipOffline(c){
     log(`Offline export: trimming ${fmtDuration(c.start)} to ${fmtDuration(c.end)}, then rendering at 30fps. This takes longer than the clip — keep this tab in front.`);
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
     try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
-    let code=await ffmpeg.exec(['-ss', String(c.start), '-t', String(dur), '-i', 'input.mp4', '-c', 'copy', 'segment.mp4']); if(code!==0) throw new Error('Trim step failed (FFmpeg code '+code+').');
-    code=await ffmpeg.exec(['-i', 'segment.mp4', '-vf', filter, '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4']); if(code!==0) throw new Error('Render step failed (FFmpeg code '+code+').');
+    let code=await ffmpeg.exec(['-ss', String(c.start), '-t', String(dur), '-i', 'input.mp4', '-c', 'copy', 'segment.mp4']); if(typeof code==='number' && code!==0) throw new Error('Trim step failed (FFmpeg code '+code+').');
+    code=await ffmpeg.exec(['-i', 'segment.mp4', '-vf', filter, '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4']); if(typeof code==='number' && code!==0) throw new Error('Render step failed (FFmpeg code '+code+').');
     const data=await ffmpeg.readFile('output.mp4');
+    if(!data || !data.byteLength) throw new Error('Offline export produced an empty output file.');
     const blob=new Blob([data.buffer.slice(data.byteOffset, data.byteOffset+data.byteLength)], {type:'video/mp4'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'-offline.mp4'; a.textContent='⬇ Download '+a.download+' ('+Math.round(blob.size/1048576*10)/10+' MB)'; a.style.display='block'; a.style.margin='8px 0';
@@ -1326,9 +1327,15 @@ async function exportClipMedia(c,withCaptions=true){
   const fps = 30;
   await seekTo(c.start);
   video.muted = false; video.playbackRate = 1; video.play();
-  const useManualFrames = typeof canvas.captureStream === 'function';
-  const vStream = useManualFrames ? canvas.captureStream(0) : canvas.captureStream(fps);
-  const vTrack = vStream.getVideoTracks()[0];
+  // Manual frames (captureStream(0) + requestFrame) only work if requestFrame exists.
+  // If it does not, captureStream(0) would capture NO frames at all — an empty file.
+  // So test for it first, and fall back to 30fps capture when it is missing.
+  let vStream, vTrack, useManualFrames=false;
+  try{
+    const s0=canvas.captureStream(0), t0=s0.getVideoTracks()[0];
+    if(t0 && typeof t0.requestFrame === 'function'){ vStream=s0; vTrack=t0; useManualFrames=true; }
+    else { try{ t0.stop(); }catch(e){} vStream=canvas.captureStream(fps); vTrack=vStream.getVideoTracks()[0]; log('Note: this browser does not support manual frame requests, using 30fps capture instead.'); }
+  }catch(e){ vStream=canvas.captureStream(fps); vTrack=vStream.getVideoTracks()[0]; }
   let tracks = [...vStream.getVideoTracks()], audioCaptured=false;
   try{
     const vs = video.captureStream ? video.captureStream() : null;
@@ -1380,7 +1387,7 @@ async function exportClipMedia(c,withCaptions=true){
       ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, ow, oh);
     }
     if(withCaptions)drawCaptionText(ctx,ow,oh,c,video.currentTime,false);
-    if(vTrack && typeof vTrack.requestFrame === 'function'){ try{ vTrack.requestFrame(); }catch(e){} }
+    if(useManualFrames && vTrack && typeof vTrack.requestFrame === 'function'){ try{ vTrack.requestFrame(); }catch(e){} }
     $('progress').value = Math.round((video.currentTime-c.start)/Math.max(0.1,(c.end-c.start))*100);
     await waitForNextFrame();
     if(video.paused && video.currentTime < c.end) video.play();
@@ -1390,6 +1397,8 @@ async function exportClipMedia(c,withCaptions=true){
   await done;
   $('progress').value = exportStop ? 0 : 100;
   if(exportStop){ log('Export cancelled; no download was created.'); return false; }
+  const totalBytes=chunks.reduce((s,ch)=>s+(ch.size||0),0);
+  if(!totalBytes){ log('Export produced no frames — the file would be empty, so no download was created. Keep this tab in front during export and try again. If it still fails, tell me what browser you are using.'); $('progress').value=0; return false; }
   const blob = new Blob(chunks, {type: mime || 'video/webm'});
   const ext = (mime && mime.indexOf('mp4') >= 0) ? 'mp4' : 'webm';
   const url = URL.createObjectURL(blob);
