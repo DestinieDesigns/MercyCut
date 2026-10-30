@@ -231,7 +231,7 @@
           <button id="stopTrack">Stop Tracking</button>
         </div>
         <div class="row"><label for="trackingSmoothness">Crop smoothness <input id="trackingSmoothness" type="range" min="0" max="100" value="55"></label><span id="trackingSmoothnessValue">55%</span></div>
-        <p>Tracking checks every 0.5 seconds and follows the detected person whose centre is nearest to the last position, within 45% of the video width. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
+        <p>Tracking follows the detected person whose centre is nearest to the last position, within 60% of the video width, with at least 50% confidence. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
         <p>Privacy and downloads: your video stays in this tab. First use downloads TensorFlow.js and COCO-SSD from jsDelivr; only video frames being analyzed are used locally. The page has no analytics or upload feature. TensorFlow.js and the COCO-SSD model are Apache-2.0.</p>
         <progress id="trackProgress" value="0" max="100"></progress>
         <div id="trackStatus" aria-live="polite">Tracking has not run for this clip.</div>
@@ -1066,7 +1066,7 @@ async function runAutomaticTracking(c){
   const trackStep=isMovementClip? (parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1) || 1) : 0.5;
   const trackSize=isMovementClip? (parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512) || 512) : 640;
   const model=await loadCoco(),v=await ensureTrackingVideo(),scale=Math.min(1,trackSize/v.videoWidth),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(v.videoWidth*scale));canvas.height=Math.max(1,Math.round(v.videoHeight*scale));const ctx=canvas.getContext('2d');
-  const cacheKey=sid+'::'+targetId;if(!sourceTrackingCache.has(cacheKey))sourceTrackingCache.set(cacheKey,new Map());const cache=sourceTrackingCache.get(cacheKey);
+  const cacheKey=sid+'::'+targetId+'::v2relaxed';if(!sourceTrackingCache.has(cacheKey))sourceTrackingCache.set(cacheKey,new Map());const cache=sourceTrackingCache.get(cacheKey);
   const times=[c.start];for(let t=Math.ceil(c.start/trackStep)*trackStep;t<c.end-.01;t+=trackStep)if(t>c.start+.01)times.push(t);if(c.end>c.start+.01)times.push(c.end);
   let last=anchor,points=[],lost=0,uncertain=0;
   for(let n=0;n<times.length;n++){
@@ -1077,7 +1077,7 @@ async function runAutomaticTracking(c){
     else{
       await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
       const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
-      const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.035,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.45&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.65?candidate:null;
+      const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.01,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.60&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.50?candidate:null;
       const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
       cache.set(key,point);points.push(point);if(best)last={cx:best.cx,cy:best.cy};else lost++;if(point.lost||point.lowConfidence)uncertain++;
     }
