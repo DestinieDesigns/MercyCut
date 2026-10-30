@@ -23,6 +23,13 @@
   #cropBox{position:absolute;border:3px solid #c7a45a;box-shadow:0 0 0 9999px rgba(0,0,0,.35);cursor:move;touch-action:none}
   #cropBox .tag{position:absolute;top:-22px;left:0;background:#c7a45a;color:#000;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px}
   #candidates{position:absolute;inset:0;pointer-events:none}
+  #trackingOverlay{position:absolute;inset:0;pointer-events:none}
+  .trackBox{position:absolute;border:3px solid #2ecc71;border-radius:4px}
+  .trackBox.other{border-color:#aaa;border-width:2px;opacity:.55}
+  .trackBox.lost{border-color:#e74c3c;border-style:dashed;border-width:4px}
+  .trackBox span{position:absolute;top:-24px;left:0;background:#2ecc71;color:#000;font-size:14px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
+  .trackBox.other span{background:#aaa}
+  .trackBox.lost span{background:#e74c3c;color:#fff}
   .personBox{position:absolute;border:3px solid #2ecc71;border-radius:4px;cursor:pointer;pointer-events:auto}
   .personBox.dim{opacity:.35}
   .personBox.sel{border-color:#bb86fc;border-width:5px;opacity:1}
@@ -112,6 +119,7 @@
         <div id="stage">
           <video id="video" playsinline preload="metadata"></video>
           <div id="candidates"></div>
+          <div id="trackingOverlay"></div>
           <div id="cropBox" style="display:none"><span class="tag">CROP — drag me</span></div>
         </div>
         <div class="row">
@@ -163,8 +171,10 @@
         <p>Movement means how far the person you picked moves — left, right, up, down — between samples. The app watches the whole video, measures movement in every 2-minute window, and picks the windows with the most movement. Singing, music, and quiet talking do not matter here, because we watch movement, not sound.</p>
         <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip. If a live Export comes out choppy (about 4 frames a second), press “Export Offline (smooth)” on that clip instead — it renders frame by frame at 30fps, slower to export, but smooth to watch.</p>
         <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
-        <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button></div>
-        <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
+        <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button><button id="movementPresetFinest">Finest (0.1s)</button></div>
+        <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.033">Every frame (0.033s, very slow)</option><option value="0.1">0.1 seconds (very detailed, slow)</option><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
+        <div class="row"><label><input type="checkbox" id="showTrackingOverlay" checked> Show tracking live on video (green box = tracking, red dashed box = lost)</label><button id="clearTrackingOverlay">Clear tracking boxes</button></div>
+        <div id="trackingOverlayInfo" class="captionStatus" aria-live="polite">Tracking boxes will appear on the video while tracking runs. Green = person found, red dashed = lost, holding last position.</div>
         <p style="font-size:0.9em">Fastest = fewest checks, quickest, crop may jump a bit. Fast &amp; Smooth = the balanced default. Most Accurate = checks every 0.5 seconds at full size, slowest, most precise. Smoothest = very smooth crop, but may lag a little if the person walks fast. Export itself is still real-time in a browser — a 2-minute clip takes about 2 minutes to save — that part cannot be sped up here without a different export tool.</p>
         <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
         <div class="row"><button id="movementFind">Find Best Movement Clips</button><button id="movementStop" disabled>Stop Movement Search</button></div>
@@ -1058,6 +1068,43 @@ function ensureTrackingVideo(){
   return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('The background video could not load metadata.')),15000);v.addEventListener('loadedmetadata',()=>{clearTimeout(timer);resolve(v);},{once:true});v.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('The source video cannot be decoded for tracking.'));},{once:true});});
 }
 function seekTrackingVideo(v,t){return new Promise((resolve,reject)=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);v.removeEventListener('seeked',finish);resolve();};const timer=setTimeout(()=>{if(done)return;done=true;v.removeEventListener('seeked',finish);if(Math.abs(v.currentTime-t)<.08)resolve();else reject(new Error('Video seek timed out at '+fmtFull(t)+'.'));},5000);v.addEventListener('seeked',finish,{once:true});try{v.currentTime=Math.max(0,Math.min(v.duration||t,t));if(Math.abs(v.currentTime-t)<.01)finish();}catch(err){clearTimeout(timer);done=true;reject(err);}});}
+
+let lastTrackBox={w:0,h:0};
+function clearTrackingOverlay(){
+  const el=$('trackingOverlay'); if(el) el.innerHTML='';
+  const info=$('trackingOverlayInfo'); if(info) info.textContent='Tracking boxes cleared.';
+}
+function renderTrackingOverlay(persons, best, point, t){
+  const el=$('trackingOverlay'), info=$('trackingOverlayInfo');
+  if(!el) return;
+  if(!$('showTrackingOverlay') || !$('showTrackingOverlay').checked){ el.innerHTML=''; return; }
+  if(!video.videoWidth || !video.videoHeight) return;
+  // Seek the main video to the tracking time (throttled to >1s jumps) so the box lines up with the frame you see.
+  try{ if(Math.abs(video.currentTime-t)>1) video.currentTime=t; }catch(e){}
+  const sr=stage.getBoundingClientRect(), vr=videoContentRect();
+  const sx=vr.width/video.videoWidth, sy=vr.height/video.videoHeight, ox=vr.left-sr.left, oy=vr.top-sr.top;
+  el.innerHTML='';
+  const drawBox=(cx,cy,w,h,cls,label)=>{
+    const d=document.createElement('div'); d.className='trackBox '+cls;
+    d.style.left=(ox+(cx-w/2)*sx)+'px'; d.style.top=(oy+(cy-h/2)*sy)+'px';
+    d.style.width=Math.max(24,w*sx)+'px'; d.style.height=Math.max(24,h*sy)+'px';
+    const s=document.createElement('span'); s.textContent=label; d.appendChild(s); el.appendChild(d);
+  };
+  (persons||[]).forEach(p=>{
+    if(best && Math.abs(p.cx-best.cx)<1 && Math.abs(p.cy-best.cy)<1) return;
+    drawBox(p.cx,p.cy,p.w,p.h,'other',Math.round(p.confidence*100)+'%');
+  });
+  if(best){
+    drawBox(best.cx,best.cy,best.w,best.h,'','TRACKING '+fmtFull(t)+' '+Math.round(best.confidence*100)+'%');
+    if(info) info.textContent='Tracking at '+fmtFull(t)+' — person found ('+Math.round(best.confidence*100)+'%).';
+  }else{
+    const w=lastTrackBox.w||video.videoWidth*0.25, h=lastTrackBox.h||video.videoHeight*0.5;
+    const cx=point?point.cx:lastTrackBox.cx||video.videoWidth/2, cy=point?point.cy:lastTrackBox.cy||video.videoHeight/2;
+    drawBox(cx,cy,w,h,'lost','LOST at '+fmtFull(t)+' — holding last position');
+    if(info){ info.textContent='LOST at '+fmtFull(t)+' — holding last position. This is where tracking gets lost.'; info.style.color='#ff8a8a'; }
+  }
+  if(best && info) info.style.color='';
+}
 async function runAutomaticTracking(c){
   const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...selectedAnchor},sid=c.sourceIdentity||sourceIdentity;
   if(!anchor||!targetId)throw new Error('Select the person to follow once in the source video.');
@@ -1065,23 +1112,25 @@ async function runAutomaticTracking(c){
   if(sid!==sourceIdentity)throw new Error('Tracking target belongs to a different source recording.');
   c.trackingStatus='in-progress';c.trackingProgress=0;renderClips();
   const isMovementClip=c.creationMethod==='auto-movement';
-  const trackStep=isMovementClip? (parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1) || 1) : 0.5;
+  const movementStep=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
+  const trackStep=isMovementClip? movementStep : (movementStep<=0.1 ? movementStep : 0.5);
   const trackSize=isMovementClip? (parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512) || 512) : 640;
   const model=await loadCoco(),v=await ensureTrackingVideo(),scale=Math.min(1,trackSize/v.videoWidth),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(v.videoWidth*scale));canvas.height=Math.max(1,Math.round(v.videoHeight*scale));const ctx=canvas.getContext('2d');
   const cacheKey=sid+'::'+targetId+'::v2relaxed';if(!sourceTrackingCache.has(cacheKey))sourceTrackingCache.set(cacheKey,new Map());const cache=sourceTrackingCache.get(cacheKey);
   const times=[c.start];for(let t=Math.ceil(c.start/trackStep)*trackStep;t<c.end-.01;t+=trackStep)if(t>c.start+.01)times.push(t);if(c.end>c.start+.01)times.push(c.end);
-  let last=anchor,points=[],lost=0,uncertain=0;
+  let last=anchor,points=[],lost=0,uncertain=0,lostTimes=[];
   for(let n=0;n<times.length;n++){
     if(trackStop)throw new Error('Tracking was cancelled.');
     if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
     const t=times[n],key=t.toFixed(3),cached=cache.get(key);
-    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else lost++;if(point.lost||point.lowConfidence)uncertain++;}
+    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t);}
     else{
       await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
       const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
       const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.01,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.60&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.50?candidate:null;
       const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
-      cache.set(key,point);points.push(point);if(best)last={cx:best.cx,cy:best.cy};else lost++;if(point.lost||point.lowConfidence)uncertain++;
+      cache.set(key,point);points.push(point);if(best){last={cx:best.cx,cy:best.cy};lastTrackBox={w:best.w,h:best.h};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;
+      renderTrackingOverlay(persons, best, point, t);
     }
     c.trackingProgress=Math.round((n+1)/times.length*100);
     if(sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
@@ -1089,6 +1138,7 @@ async function runAutomaticTracking(c){
     await new Promise(resolve=>setTimeout(resolve,0));
   }
   const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
+  if(lostTimes.length) log('Tracking lost at: '+lostTimes.slice(0,20).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>20?' … ('+lostTimes.length+' total)':'')+' — those are the times the box turned red.');
   if(!valid)throw new Error('Tracking samples did not cover the full clip range.');
   c.track=points;c.trackingStatus='ready';c.trackingError='';c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
   if(uncertain)c.trackingError=uncertain+' low-confidence, ambiguous, or lost sample(s) held at the last reliable position.';
@@ -2196,6 +2246,7 @@ function updateMovementEstimate(){
   const exportEst=topN*120;
   const total=movementEst+trackingEst+exportEst;
   el.textContent='Estimated time for this video ('+fmtDuration(fullDuration)+' long, skipping '+fmtDuration(skipStart)+'): Movement search ~'+fmtDuration(movementEst)+' ('+sampleCount+' samples) + Tracking ~'+fmtDuration(trackingEst)+' ('+topN+' clips × ~'+trackingSamplesPerClip+' checks) + Saving all clips ~'+fmtDuration(exportEst)+' (real time, 2 min per clip) = about '+fmtDuration(total)+' if you save all '+topN+' clips. Saving only the clips you tick will be less. These are estimates — your computer speed will change them, and the timer while it runs will adjust to your actual speed.';
+  if(trackStep<=0.1) el.textContent+=' Warning: '+trackStep+'s means ~'+trackingSamplesPerClip+' checks per 2-min clip — very slow. Try one short clip first.';
 }
 ['movementCount','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness'].forEach(id=>{
   const el=$(id);
@@ -2331,6 +2382,8 @@ $('movementPresetFastest').addEventListener('click', ()=>applyMovementPreset(2, 
 $('movementPresetFastSmooth').addEventListener('click', ()=>applyMovementPreset(1, 512, 70, 'Fast & Smooth'));
 $('movementPresetAccurate').addEventListener('click', ()=>applyMovementPreset(0.5, 640, 55, 'Most Accurate'));
 $('movementPresetSmoothest').addEventListener('click', ()=>applyMovementPreset(1, 512, 85, 'Smoothest'));
+$('movementPresetFinest').addEventListener('click', ()=>applyMovementPreset(0.1, 640, 70, 'Finest'));
+if($('clearTrackingOverlay')) $('clearTrackingOverlay').addEventListener('click', clearTrackingOverlay);
 if($('movementSmoothness')) $('movementSmoothness').addEventListener('input', ()=>{
   const v=parseInt($('movementSmoothness').value)||70;
   if($('movementSmoothnessValue')) $('movementSmoothnessValue').textContent=v+'%';
