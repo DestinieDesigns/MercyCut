@@ -87,9 +87,13 @@
 <body>
 <header>
   <h1>MercyCut Web v2 — Movement Clips</h1>
-  <p class="homTag">ACCI House of Mercy • Worship • Word • Wonder</p><p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
+  <p class="homTag">ACCI House of Mercy • Worship • Word • Wonder</p>
+  <button id="toggleHelp">Show instructions</button>
+  <div id="helpText" hidden>
+  <p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
   <p><strong>No Python. No install. No upload.</strong> Open this file in Chrome or Edge, pick a video from your computer, and edit it right in this tab. Your video never leaves this device — there is no server here to send it to.</p>
   <p class="warn">Honest limits, please read: browsers cannot play every format (MP4 works best; MKV and some MOV files may not play). Export runs in real time, so a 60-second clip takes about 60 seconds to export, and you must keep this tab in front while it exports. For very long services, cut short clips first. The desktop version is still faster for 2–3 hour files.</p>
+  </div>
 </header>
 <div class="wrap">
   <div class="card">
@@ -2379,6 +2383,7 @@ async function findBestMovementClips(){
   }
 }
 $('movementFind').addEventListener('click', findBestMovementClips);
+if($('toggleHelp')) $('toggleHelp').addEventListener('click', ()=>{ const h=$('helpText'); if(!h) return; h.hidden=!h.hidden; $('toggleHelp').textContent=h.hidden?'Show instructions':'Hide instructions'; });
 if($('testOfflineExporter')) $('testOfflineExporter').addEventListener('click', async ()=>{ try{ $('movementStatus').textContent='Testing offline exporter…'; await loadOfflineFFmpeg(); $('movementStatus').textContent='Offline exporter loaded OK. Now press Export Offline (smooth) on a clip.'; log('Offline exporter test: loaded OK.'); }catch(e){ $('movementStatus').textContent='Offline exporter test failed: '+(e.message||e); } });
 $('movementStop').addEventListener('click', ()=>{ autopilotStopRequested=true; trackStop=true; $('movementStatus').textContent='Stopping movement search after the current sample...'; });
 function applyMovementPreset(step, size, smooth, label){
