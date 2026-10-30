@@ -161,7 +161,7 @@
       <div class="card" id="movementCard">
         <h3 style="margin-top:0">Find Best Movement Clips — no captions, no transcript, no prompt</h3>
         <p>Movement means how far the person you picked moves — left, right, up, down — between samples. The app watches the whole video, measures movement in every 2-minute window, and picks the windows with the most movement. Singing, music, and quiet talking do not matter here, because we watch movement, not sound.</p>
-        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking is ready, tick the clips you want in My Clips and press “Save Picked Clips”.</p>
+        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip.</p>
         <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
         <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button></div>
         <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
@@ -651,8 +651,8 @@ function buildTranscriptCandidates(input,{target=60,min=20,max=90,sourceDuration
   }
   return out;
 }
-function approvalLabel(c){return c.approvalState==='approved'?'Approved':c.approvalState==='rejected'?'Rejected':c.approvalState==='suggested'?'Suggested':c.reviewed?'Reviewed · Awaiting Approval':'Needs Review';}
-function isApprovedClip(c){return !!c&&c.approvalState==='approved';}
+function approvalLabel(c){ if(!c) return 'No clip'; if(trackingExportReady(c)) return 'Ready to export'; if(c.trackingStatus==='in-progress') return 'Tracking...'; return 'Not tracked yet'; }
+function isApprovedClip(c){ return !!c && trackingExportReady(c); }
 function trackingExportReady(c){if(!c)return false;if(c.trackingValidated&&Array.isArray(c.track)&&c.track.length>=2)return true;const keys=(c.keys||[]).slice().sort((a,b)=>a.t-b.t);return keys.length>=2&&keys[0].t<=c.start+.5&&keys[keys.length-1].t>=c.end-.5;}
 function approveClip(c){if(!c)return false;if(!c.reviewed){alert('Preview the complete clip and mark it Reviewed before approving it for export.');return false;}c.approvalState='approved';c.approvedAt=new Date().toISOString();c.rejectedAt=null;captionProjectDirty=true;renderClips();log('Approved '+c.name+' for export.');return true;}
 function rejectClip(c){if(!c)return;c.approvalState='rejected';c.approvedAt=null;c.rejectedAt=new Date().toISOString();c.batchSelected=false;captionProjectDirty=true;renderClips();log('Rejected '+c.name+'. It will not be included in approved exports.');}
@@ -869,9 +869,9 @@ function renderClips(){
     const action=(label,fn,titleText,parent=actions)=>{const b=document.createElement('button');b.textContent=label;if(titleText)b.title=titleText;b.addEventListener('click',e=>{e.stopPropagation();fn();});parent.appendChild(b);return b;};
     const exportButton=action('Export',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClip(c);},!isApprovedClip(c)?'Approve this clip before exporting':!trackingExportReady(c)?'Tracking must finish or be corrected with keyframes':'Export this approved clip');
     exportButton.disabled=activeExportIds.size>0||!isApprovedClip(c)||!trackingExportReady(c);
-    const reviewButton=action(clipReviewSession&&clipReviewSession.clipId===c.id?'Reviewing '+(c.reviewPlaybackProgress||0)+'%':c.reviewPlaybackComplete?'Review Again':'Review Clip',()=>startClipReview(c),'Play this complete clip, then mark it reviewed');reviewButton.className='reviewClipAction';reviewButton.disabled=activeExportIds.size>0||!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity;
-    const markReviewedButton=action(c.reviewed?'Reviewed ✓':'Mark Reviewed',()=>markClipReviewed(c),'Enabled after Review Clip has played from start to end');markReviewedButton.disabled=!c.reviewPlaybackComplete||c.reviewed||activeExportIds.size>0;
-    const approveButton=action(c.approvalState==='approved'?'Approved ✓':'Approve Clip',()=>approveClip(c),'Mark Reviewed is required before approval');approveButton.className='approveClipAction';approveButton.disabled=!c.reviewed||isApprovedClip(c)||activeExportIds.size>0;
+    const reviewButton=action(clipReviewSession&&clipReviewSession.clipId===c.id?'Reviewing '+(c.reviewPlaybackProgress||0)+'%':c.reviewPlaybackComplete?'Review Again':'Review Clip',()=>startClipReview(c),'Play this complete clip, then mark it reviewed');reviewButton.className='reviewClipAction';reviewButton.disabled=activeExportIds.size>0||!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity; reviewButton.style.display='none';
+    const markReviewedButton=action(c.reviewed?'Reviewed ✓':'Mark Reviewed',()=>markClipReviewed(c),'Enabled after Review Clip has played from start to end'); markReviewedButton.style.display='none';markReviewedButton.disabled=!c.reviewPlaybackComplete||c.reviewed||activeExportIds.size>0;
+    const approveButton=action(c.approvalState==='approved'?'Approved ✓':'Approve Clip',()=>approveClip(c),'Mark Reviewed is required before approval'); approveButton.style.display='none';approveButton.className='approveClipAction';approveButton.disabled=!c.reviewed||isApprovedClip(c)||activeExportIds.size>0;
     const more=document.createElement('details');more.className='clipMore';const summary=document.createElement('summary');summary.textContent='More';more.appendChild(summary);
     const rejectButton=action(c.approvalState==='rejected'?'Rejected':'Reject Clip',()=>rejectClip(c),'Keep this clip out of approved exports',more);rejectButton.disabled=activeExportIds.size>0;
     if(c.approvalState==='rejected')action('Return to Suggestions',()=>{c.approvalState='suggested';c.rejectedAt=null;captionProjectDirty=true;renderClips();},'Return this clip to the review list',more);
@@ -1088,9 +1088,9 @@ async function runAutomaticTracking(c){
   }
   const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
   if(!valid)throw new Error('Tracking samples did not cover the full clip range.');
-  c.track=points;c.trackingStatus=uncertain?'needs-review':'ready';c.trackingError='';c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingValidated=true;
+  c.track=points;c.trackingStatus='ready';c.trackingError='';c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
   if(uncertain)c.trackingError=uncertain+' low-confidence, ambiguous, or lost sample(s) held at the last reliable position.';
-  c.reviewed=false;c.exportStatus='not-exported';c.exportError='';captionProjectDirty=true;renderClips();
+  c.reviewed=true;c.exportStatus='not-exported';c.exportError='';captionProjectDirty=true;renderClips();
   if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);drawPreview();}
   log('Automatic tracking '+(uncertain?'needs review':'ready')+' for '+c.name+': '+points.length+' timestamped samples across '+(c.end-c.start).toFixed(1)+' seconds.');
 }
@@ -1231,7 +1231,7 @@ function setExportControlsLocked(locked){
 }
 async function exportClip(c,withCaptions=true,skipApproval=false){
   if(activeExportIds.size){log('Another export is already running. Wait for it to finish before starting another.');return false;}
-  if(!skipApproval && !isApprovedClip(c)){alert('This clip is '+approvalLabel(c)+'. Mark it Reviewed, then approve it before exporting, or use Save Picked Clips for clips you picked yourself.');return false;}
+  if(!skipApproval && !isApprovedClip(c)){alert('This clip is '+approvalLabel(c)+'. Wait for tracking to reach 100%, then it will be ready to export — no review click needed.');return false;}
   if(!trackingExportReady(c)){alert('Tracking for this clip is not ready. Wait for automatic tracking, or add keyframes at the START and END boundaries to correct the crop before exporting.');return false;}
   if(c.trackingStatus==='in-progress'){alert('Wait for tracking to finish before exporting this clip so the preview and export use the same crop path.');return false;}
   if(c.sourceName&&sourceName&&c.sourceName!==sourceName){c.exportError='Load the matching source video before exporting.';c.exportStatus='failed';renderClips();alert('This clip was made from "'+c.sourceName+'". Load that video before exporting it.');return false;}
@@ -1994,6 +1994,7 @@ $('autoFindLoudest').addEventListener('click', findLoudestClips);
     const h=card.querySelector('h3');
     if(h && /Autopilot — walk away|Auto Clipper — transcript suggestions|^Captions$/.test(h.textContent.trim())) card.style.display='none';
   });
+  ['approveSelectedClips','rejectSelectedClips'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 })();
 function buildMovementCandidates(samples, startAt, endAt, topN){
   const target=120, min=90, max=150;
