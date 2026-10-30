@@ -161,7 +161,7 @@
       <div class="card" id="movementCard">
         <h3 style="margin-top:0">Find Best Movement Clips — no captions, no transcript, no prompt</h3>
         <p>Movement means how far the person you picked moves — left, right, up, down — between samples. The app watches the whole video, measures movement in every 2-minute window, and picks the windows with the most movement. Singing, music, and quiet talking do not matter here, because we watch movement, not sound.</p>
-        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip.</p>
+        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip. If a live Export comes out choppy (about 4 frames a second), press “Export Offline (smooth)” on that clip instead — it renders frame by frame at 30fps, slower to export, but smooth to watch.</p>
         <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
         <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button></div>
         <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
@@ -286,7 +286,7 @@ const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), cropBox = $('cropBox'), outCanvas = $('outCanvas'), octx = outCanvas.getContext('2d');
 let clips = [], sel = -1, manualCenter = null, sourceName = '', sourceIdentity='';
 let sourceTranscript=[],transcriptSourceName='',transcriptFileName='';
-let trackStop = false, exportStop = false;
+let trackStop = false, exportStop = false; let sourceFile=null;
 let cocoModel = null, cocoLoadPromise = null, candidates = [], selectedPerson = null, detectedAt = null;
 let selectedAnchor = null, selectedPersonNumber = null, detectionTimer = null, detectRequest = 0;
 let trackBusy = false;
@@ -502,7 +502,7 @@ $('fileInput').addEventListener('change', async e => {
   $('selInfo').textContent='No person selected. Click a numbered box or Person button under the video.';
   $('selInfo').className = 'warn'; renderCandidates();
   $('autoTrack').textContent='Retry Tracking for Clip'; $('detectionInfo').textContent='Video is loading… people will be found automatically.';
-  sourceName = f.name;
+  sourceName = f.name; sourceFile = f;
   sourceIdentity=f.name+'|'+f.size+'|'+f.lastModified;
   trackStop=true;trackingQueue=[];trackingTargetId='';trackingVideo=null;if(trackingVideoUrl)retiredTrackingUrls.push(trackingVideoUrl);trackingVideoUrl=URL.createObjectURL(f);if(!trackingQueueRunning){retiredTrackingUrls.forEach(url=>URL.revokeObjectURL(url));retiredTrackingUrls=[];}
   if(video.src) URL.revokeObjectURL(video.src);
@@ -869,6 +869,8 @@ function renderClips(){
     const action=(label,fn,titleText,parent=actions)=>{const b=document.createElement('button');b.textContent=label;if(titleText)b.title=titleText;b.addEventListener('click',e=>{e.stopPropagation();fn();});parent.appendChild(b);return b;};
     const exportButton=action('Export',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClip(c);},!isApprovedClip(c)?'Approve this clip before exporting':!trackingExportReady(c)?'Tracking must finish or be corrected with keyframes':'Export this approved clip');
     exportButton.disabled=activeExportIds.size>0||!isApprovedClip(c)||!trackingExportReady(c);
+    const offlineButton=action('Export Offline (smooth)',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClipOffline(c);},'Slower, frame-by-frame export — smooth 30fps, not a live recording. First use downloads about 30 MB.');
+    offlineButton.disabled=activeExportIds.size>0||!trackingExportReady(c);
     const reviewButton=action(clipReviewSession&&clipReviewSession.clipId===c.id?'Reviewing '+(c.reviewPlaybackProgress||0)+'%':c.reviewPlaybackComplete?'Review Again':'Review Clip',()=>startClipReview(c),'Play this complete clip, then mark it reviewed');reviewButton.className='reviewClipAction';reviewButton.disabled=activeExportIds.size>0||!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity; reviewButton.style.display='none';
     const markReviewedButton=action(c.reviewed?'Reviewed ✓':'Mark Reviewed',()=>markClipReviewed(c),'Enabled after Review Clip has played from start to end'); markReviewedButton.style.display='none';markReviewedButton.disabled=!c.reviewPlaybackComplete||c.reviewed||activeExportIds.size>0;
     const approveButton=action(c.approvalState==='approved'?'Approved ✓':'Approve Clip',()=>approveClip(c),'Mark Reviewed is required before approval'); approveButton.style.display='none';approveButton.className='approveClipAction';approveButton.disabled=!c.reviewed||isApprovedClip(c)||activeExportIds.size>0;
@@ -1163,6 +1165,103 @@ function pickMime(){
   const cands = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
   for(const m of cands){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
   return '';
+}
+
+// --- Offline Smooth Export (frame-by-frame, not live) ---
+// Live export draws and records at the same time, so on a PC without a dedicated
+// graphics card it can only manage ~4 frames a second. Offline export instead:
+// 1) trims the clip segment with FFmpeg (copy, fast), 2) crops it frame by frame
+// following the tracked crop centres, at a fixed 30fps, with original audio
+// re-encoded to AAC. It takes longer than the clip itself, but the output is
+// a proper 30fps MP4, not a slideshow. First use downloads the FFmpeg core
+// (about 30 MB, internet needed once) and must be opened in Chrome directly,
+// not in a preview panel, because preview panels block outside scripts.
+let offlineFFmpeg=null, offlineFFmpegLoading=null, offlineFetchFile=null, offlineInputWrittenFor='';
+async function loadOfflineFFmpeg(){
+  if(offlineFFmpeg) return offlineFFmpeg;
+  if(offlineFFmpegLoading) return offlineFFmpegLoading;
+  offlineFFmpegLoading=(async()=>{
+    log('Loading offline exporter (first time only, about 30 MB)… keep this tab in front.');
+    const ffmpegMod=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm');
+    const utilMod=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm');
+    offlineFetchFile=utilMod.fetchFile;
+    const ffmpeg=new ffmpegMod.FFmpeg();
+    const base='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/esm';
+    await ffmpeg.load({
+      coreURL: await utilMod.toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await utilMod.toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm')
+    });
+    offlineFFmpeg=ffmpeg;
+    return ffmpeg;
+  })();
+  try{ return await offlineFFmpegLoading; }catch(e){ offlineFFmpegLoading=null; throw e; }
+}
+function buildOfflineCropFilter(c, sw, sh, ow, oh){
+  const target=ow/oh, source=sw/sh;
+  if(target>source) return null; // wider than source = blurred fill, not a crop; use live Export for that case
+  const cw=Math.round(sh*target/2)*2, ch=sh;
+  if(cw<=0||cw>sw) return null;
+  const dur=c.end-c.start;
+  const samples=[];
+  for(let rel=0; rel<dur; rel+=1){
+    const centre=cropCenterAt(c, c.start+rel);
+    if(centre) samples.push({t:rel, cx:centre.cx});
+  }
+  samples.push({t:dur, cx:(cropCenterAt(c, c.end)||{cx:sw/2}).cx});
+  const xs=samples.map(s=>Math.round(Math.max(0, Math.min(sw-cw, s.cx-cw/2))));
+  const intervalExpr=(i)=>{
+    const t0=samples[i].t, t1=samples[i+1].t, x0=xs[i], x1=xs[i+1];
+    if(x0===x1||t1===t0) return String(x0);
+    return `trunc(${x0}+(${x1}-${x0})*(t-${t0})/(${t1}-${t0}))`;
+  };
+  const build=(i)=>{
+    if(i>=samples.length-1) return String(xs[xs.length-1]);
+    return `if(lt(t,${samples[i+1].t}),${intervalExpr(i)},${build(i+1)})`;
+  };
+  const expr=build(0);
+  return `crop=${cw}:${ch}:x='${expr}':y=0,scale=${ow}:${oh},setsar=1,format=yuv420p`;
+}
+async function exportClipOffline(c){
+  if(activeExportIds.size){ log('Wait for the current export to finish before starting an offline export.'); return; }
+  if(!trackingExportReady(c)){ log('Offline export needs tracking to reach 100% first.'); return; }
+  if(!sourceFile){ alert('Please load the original video file again in this page first, so the offline exporter can read it.'); return; }
+  if(c.sourceName&&c.sourceName!==sourceName){ alert('Load the matching source video: '+c.sourceName+'.'); return; }
+  const sw=video.videoWidth, sh=video.videoHeight;
+  if(!sw||!sh){ alert('Load a video first.'); return; }
+  const ow=c.outW, oh=c.outH;
+  const filter=buildOfflineCropFilter(c, sw, sh, ow, oh);
+  if(!filter){ log('Offline export does not cover this shape (wider than the source, blurred fill). Use the normal Export button for this clip.'); return; }
+  if((c.captions||[]).length) log('Note: offline export does not burn in captions yet — this file will have no burned-in captions.');
+  activeExportIds.add(c.id); c.exportStatus='processing'; renderClips();
+  try{
+    const ffmpeg=await loadOfflineFFmpeg();
+    ffmpeg.on('progress', ({time})=>{ if(time!=null) $('progress').value=Math.round(Math.min(100, (time/1000000)/Math.max(0.1,(c.end-c.start))*100)); });
+    if(offlineInputWrittenFor!==sourceIdentity){
+      log('Reading original video into the offline exporter… (large files take a while)');
+      await ffmpeg.writeFile('input.mp4', await offlineFetchFile(sourceFile));
+      offlineInputWrittenFor=sourceIdentity;
+    }
+    const dur=c.end-c.start;
+    log(`Offline export: trimming ${fmtDuration(c.start)} to ${fmtDuration(c.end)}, then rendering at 30fps. This takes longer than the clip — keep this tab in front.`);
+    try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
+    try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
+    await ffmpeg.exec(['-ss', String(c.start), '-t', String(dur), '-i', 'input.mp4', '-c', 'copy', 'segment.mp4']);
+    await ffmpeg.exec(['-i', 'segment.mp4', '-vf', filter, '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4']);
+    const data=await ffmpeg.readFile('output.mp4');
+    const blob=new Blob([data.buffer], {type:'video/mp4'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'-offline.mp4'; a.textContent='⬇ Download '+a.download+' ('+Math.round(blob.size/1048576*10)/10+' MB)'; a.style.display='block'; a.style.margin='8px 0';
+    $('downloadArea').appendChild(a); a.click();
+    c.exportStatus='exported'; $('progress').value=100;
+    log('Offline export done: '+a.download+' — a proper 30fps file, not a live recording. If it did not download automatically, click the link above.');
+    try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
+    try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
+  }catch(err){
+    c.exportStatus='failed'; c.exportError='Offline export failed: '+(err.message||err);
+    log('Offline export failed: '+(err.message||err)+'. If this was a download/import error, open this file in Chrome directly (not in a preview panel) and try again.');
+  }finally{
+    activeExportIds.delete(c.id); renderClips();
+  }
 }
 async function exportClipMedia(c,withCaptions=true){
   exportStop = false;
