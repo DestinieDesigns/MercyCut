@@ -672,7 +672,19 @@ function buildTranscriptCandidates(input,{target=60,min=20,max=90,sourceDuration
 }
 function approvalLabel(c){ if(!c) return 'No clip'; if(trackingExportReady(c)) return 'Ready to export'; if(c.trackingStatus==='in-progress') return 'Tracking...'; return 'Not tracked yet'; }
 function isApprovedClip(c){ return !!c && trackingExportReady(c); }
-function trackingExportReady(c){if(!c)return false;if(c.trackingValidated&&Array.isArray(c.track)&&c.track.length>=2)return true;const keys=(c.keys||[]).slice().sort((a,b)=>a.t-b.t);return keys.length>=2&&keys[0].t<=c.start+.5&&keys[keys.length-1].t>=c.end-.5;}
+// Standing rule (Shia, 2026-10-31): anywhere no person is detected must NEVER be used.
+// A lost sample (person not found at that time) is not a crop position — it is a gap.
+// Lost samples are kept only so the user can see where tracking failed (red box, lost times log).
+// A clip is Ready to export only if every lost sample has been corrected by a manual
+// keyframe near that time, or the clip has been trimmed to exclude the lost times.
+// Until then the clip stays Needs Tracking Review and exports are blocked.
+function uncorrectedLostTimes(c){
+  if(!c || !Array.isArray(c.track)) return [];
+  const keys=c.keys||[];
+  return c.track.filter(p=>p.lost).filter(p=>!keys.some(k=>Math.abs(k.t-p.t)<=0.5)).map(p=>p.t);
+}
+function hasUncorrectedLostSamples(c){ return uncorrectedLostTimes(c).length>0; }
+function trackingExportReady(c){if(!c)return false;if(hasUncorrectedLostSamples(c))return false;if(c.trackingValidated&&Array.isArray(c.track)&&c.track.length>=2)return true;const keys=(c.keys||[]).slice().sort((a,b)=>a.t-b.t);return keys.length>=2&&keys[0].t<=c.start+.5&&keys[keys.length-1].t>=c.end-.5;}
 function approveClip(c){if(!c)return false;if(!c.reviewed){alert('Preview the complete clip and mark it Reviewed before approving it for export.');return false;}c.approvalState='approved';c.approvedAt=new Date().toISOString();c.rejectedAt=null;captionProjectDirty=true;renderClips();log('Approved '+c.name+' for export.');return true;}
 function rejectClip(c){if(!c)return;c.approvalState='rejected';c.approvedAt=null;c.rejectedAt=new Date().toISOString();c.batchSelected=false;captionProjectDirty=true;renderClips();log('Rejected '+c.name+'. It will not be included in approved exports.');}
 function markClipReviewed(c){if(!c)return false;if(!c.reviewPlaybackComplete){alert('Choose Review Clip and watch the full clip before marking it reviewed.');return false;}c.reviewed=true;captionProjectDirty=true;renderClips();log('Marked '+c.name+' reviewed. You can now approve it.');return true;}
@@ -1201,9 +1213,19 @@ async function runAutomaticTracking(c){
   const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
   if(lostTimes.length) log('Tracking lost at: '+lostTimes.slice(0,20).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>20?' … ('+lostTimes.length+' total)':'')+' — those are the times the box turned red.');
   if(!valid)throw new Error('Tracking samples did not cover the full clip range.');
-  c.track=points;c.trackingStatus='ready';c.trackingError='';c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
-  if(uncertain)c.trackingError=uncertain+' low-confidence, ambiguous, or lost sample(s) held at the last reliable position.';
-  c.reviewed=true;c.exportStatus='not-exported';c.exportError='';captionProjectDirty=true;renderClips();
+  c.track=points;c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;
+  if(lost>0){
+    // Rule: no-person moments are never used. Do NOT mark ready/approved/reviewed.
+    // The clip stays Needs Tracking Review until the user corrects the lost times
+    // (click the person at a lost time / add a keyframe there) or trims the clip
+    // to exclude them, then retries tracking.
+    c.trackingStatus='needs-review';c.trackingValidated=false;c.approvalState='needs-review';c.reviewed=false;
+    c.trackingError=lost+' sample(s) with NO person detected — those moments will not be used for export. Lost at: '+lostTimes.slice(0,10).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>10?' …':'')+'. Correct them with a keyframe at each lost time, or trim the clip to exclude them, then Retry Tracking.';
+  } else {
+    c.trackingStatus='ready';c.trackingError='';c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
+    if(uncertain)c.trackingError=uncertain+' low-confidence or ambiguous sample(s) held at the last reliable position (a person WAS detected, just with low confidence).';
+  }
+  if(lost<=0) c.reviewed=true;c.exportStatus='not-exported';c.exportError='';captionProjectDirty=true;renderClips();
   if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);drawPreview();}
   log('Automatic tracking '+(uncertain?'needs review':'ready')+' for '+c.name+': '+points.length+' timestamped samples across '+(c.end-c.start).toFixed(1)+' seconds.');
 }
@@ -1512,6 +1534,7 @@ function setExportControlsLocked(locked){
 async function exportClip(c,withCaptions=true,skipApproval=false){
   if(activeExportIds.size){log('Another export is already running. Wait for it to finish before starting another.');return false;}
   if(!skipApproval && !isApprovedClip(c)){alert('This clip is '+approvalLabel(c)+'. Wait for tracking to reach 100%, then it will be ready to export — no review click needed.');return false;}
+  if(hasUncorrectedLostSamples(c)){const lt=uncorrectedLostTimes(c);alert('This clip will NOT be exported because no person was detected at '+lt.length+' moment(s): '+lt.slice(0,10).map(x=>fmtFull(x)).join(', ')+(lt.length>10?' …':'')+'. Those moments will never be used. Correct them — scrub to a lost time, click the person there and add a keyframe — or trim the clip to exclude those times, then Retry Tracking.');return false;}
   if(!trackingExportReady(c)){alert('Tracking for this clip is not ready. Wait for automatic tracking, or add keyframes at the START and END boundaries to correct the crop before exporting.');return false;}
   if(c.trackingStatus==='in-progress'){alert('Wait for tracking to finish before exporting this clip so the preview and export use the same crop path.');return false;}
   if(c.sourceName&&sourceName&&c.sourceName!==sourceName){c.exportError='Load the matching source video before exporting.';c.exportStatus='failed';renderClips();alert('This clip was made from "'+c.sourceName+'". Load that video before exporting it.');return false;}
@@ -2293,10 +2316,11 @@ function buildMovementCandidates(samples, startAt, endAt, topN){
     const dur=Math.max(1, c.end-c.start);
     return {start:c.start, end:c.end, cues:[], activityScore:total, movementPerSecond:total/dur, movingSamples:moving, sampleCount:inside.length};
   });
-  scored.sort((a,b)=>b.activityScore-a.activityScore);
-  const maxScore=Math.max(...scored.map(s=>s.activityScore), 0.001);
-  scored.forEach(s=>{ s.activityScoreNorm=s.activityScore/maxScore; });
-  return scored.slice(0, Math.max(1, topN)).sort((a,b)=>a.start-b.start);
+  const scoredDetected=scored.filter(s=>s.sampleCount>=2);
+  scoredDetected.sort((a,b)=>b.activityScore-a.activityScore);
+  const maxScore=Math.max(...scoredDetected.map(s=>s.activityScore), 0.001);
+  scoredDetected.forEach(s=>{ s.activityScoreNorm=s.activityScore/maxScore; });
+  return scoredDetected.slice(0, Math.max(1, topN)).sort((a,b)=>a.start-b.start);
 }
 function createMovementClips(candidates){
   if(!video.videoWidth||!sourceName) return 0;
