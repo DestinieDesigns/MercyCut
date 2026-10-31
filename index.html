@@ -1222,7 +1222,7 @@ async function detectPeopleAtCurrentFrame(requestId){
     const off=document.createElement('canvas'), scale=Math.min(1,640/video.videoWidth);
     off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
     off.getContext('2d').drawImage(video,0,0,off.width,off.height);
-    const preds=await cocoModel.detect(off); if(requestId!==detectRequest || Math.abs(video.currentTime-frameTime)>0.12)return;
+    const preds=await cocoModel.detect(off); if(requestId!==detectRequest)return; if(Math.abs(video.currentTime-frameTime)>1.0){ $('detectionInfo').textContent='Frame changed while detecting (video was playing or seeked). Pause the video and press Find people again.'; return; }
     candidates=filterPeopleList(preds.filter(p=>p.class==='person').map(p=>({
       x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score
     })));
@@ -1235,7 +1235,7 @@ async function detectPeopleAtCurrentFrame(requestId){
         $('autoTrack').textContent='Retry Tracking for Clip';}
     }
     if(!candidates.length){
-      $('detectionInfo').textContent='No people found in this frame. Scrub to a clearer moment or use manual keyframes.';
+      $('detectionInfo').textContent='No people found in this frame, even after checking centre persons at lower confidence. Try: scrub 1 second forward or back and press Find people again, or set Minimum person size to Any and Only pick people to 50% sure, then press Find people again. You can also drag the gold crop box onto the person as a manual frame.';
       if(priorAnchor){$('selInfo').textContent='Your selection is saved, but no person was found in this frame. Tracking will hold its last position here.';}
       log('No people detected at '+fmtFull(frameTime)+'. Try another frame or use manual keyframes.');
     }else if(candidates.length===1&&!priorAnchor){
@@ -2371,7 +2371,7 @@ function filterPeopleList(people){
   if(!people || !people.length) return [];
   const s=getPersonFilterSettings();
   const W=video.videoWidth||1, H=video.videoHeight||1;
-  return people.filter(p=>{
+  const filtered=people.filter(p=>{
     if((p.score||0)<s.conf) return false;
     if(p.w < s.minW*W || p.h < s.minH*H) return false;
     if(s.ignoreCorners){
@@ -2383,6 +2383,20 @@ function filterPeopleList(people){
     }
     return true;
   });
+  if(filtered.length) return filtered;
+  // Centre rescue: a person right in the middle should never be dropped just
+  // because they are shorter than the Medium size filter (e.g. behind a podium,
+  // only upper body visible) or below the 65% confidence filter (e.g. low light,
+  // back turned, dark clothes). Corner logos are not in the centre, so this
+  // rescue does not bring them back: it only keeps centre persons at 50%+,
+  // any size, and the box is shown so the user can check it is the right person.
+  const centre=people.filter(p=>{
+    if((p.score||0)<0.50) return false;
+    const cx=p.x+p.w/2, cy=p.y+p.h/2;
+    return cx>=0.20*W && cx<=0.80*W && cy>=0.20*H && cy<=0.80*H;
+  });
+  if(centre.length) log('Centre person rescue: normal filters found no one, so a centre person at 50%+ confidence was kept (smaller / lower confidence than your filters). Check the box is the right person.');
+  return centre;
 }
 let movementRunning=false;
 async function findBestMovementClips(){
