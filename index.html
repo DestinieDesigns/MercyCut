@@ -288,7 +288,7 @@
           <button id="cancelExp">Cancel Export</button>
         </div>
         <progress id="progress" value="0" max="100"></progress>
-        <div id="exportInfo">Exported files download to your Downloads folder. The browser chooses MP4 or WebM when supported; audio capture depends on the browser. Export runs in real time, and this tab must stay in front.</div>
+        <div id="exportInfo">Exported files download to your Downloads folder. The browser chooses MP4 or WebM when supported; audio capture depends on the browser. Live export runs in real time, and this tab must stay in front — if you switch tabs, live export now pauses and resumes when you return. For switching tabs freely, use Export Offline (smooth), which is safe to switch tabs.</div>
         <div id="downloadArea"></div>
       </div>
     </div>
@@ -888,7 +888,7 @@ function renderClips(){
     const action=(label,fn,titleText,parent=actions)=>{const b=document.createElement('button');b.textContent=label;if(titleText)b.title=titleText;b.addEventListener('click',e=>{e.stopPropagation();fn();});parent.appendChild(b);return b;};
     const exportButton=action('Export',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClip(c);},!isApprovedClip(c)?'Approve this clip before exporting':!trackingExportReady(c)?'Tracking must finish or be corrected with keyframes':'Export this approved clip');
     exportButton.disabled=activeExportIds.size>0||!isApprovedClip(c)||!trackingExportReady(c);
-    const offlineButton=action('Export Offline (smooth)',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClipOffline(c);},'Slower, frame-by-frame export — smooth 30fps, not a live recording. First use downloads about 30 MB.');
+    const offlineButton=action('Export Offline (smooth)',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClipOffline(c);},'Slower, frame-by-frame export — smooth 30fps, not a live recording. Safe to switch tabs: it uses source timestamps, not real-time recording, so background slowing does not break sync. First use downloads about 30 MB.');
     offlineButton.disabled=activeExportIds.size>0||!trackingExportReady(c);
     const reviewButton=action(clipReviewSession&&clipReviewSession.clipId===c.id?'Reviewing '+(c.reviewPlaybackProgress||0)+'%':c.reviewPlaybackComplete?'Review Again':'Review Clip',()=>startClipReview(c),'Play this complete clip, then mark it reviewed');reviewButton.className='reviewClipAction';reviewButton.disabled=activeExportIds.size>0||!video.videoWidth||c.sourceName&&c.sourceName!==sourceName||c.sourceIdentity&&c.sourceIdentity!==sourceIdentity; reviewButton.style.display='none';
     const markReviewedButton=action(c.reviewed?'Reviewed ✓':'Mark Reviewed',()=>markClipReviewed(c),'Enabled after Review Clip has played from start to end'); markReviewedButton.style.display='none';markReviewedButton.disabled=!c.reviewPlaybackComplete||c.reviewed||activeExportIds.size>0;
@@ -1271,6 +1271,26 @@ $('clearSel').addEventListener('click', () => {
 });
 $('autoTrack').addEventListener('click',()=>{const c=curClip();if(!c){alert('Add or open a clip first.');return;}queueClipTracking(c);});
 $('stopTrack').addEventListener('click',()=>{if(trackBusy)trackStop=true;trackingQueue=[];clips.filter(c=>c.trackingStatus==='queued').forEach(c=>{c.trackingStatus='needs-review';c.trackingValidated=false;c.trackingError='Tracking was stopped; use Retry Tracking after selecting the person.';});renderClips();});
+// --- Background-tab safety (added 2026-10-31) ---
+// Browsers deliberately stop video frames and slow timers when a tab is hidden,
+// so a live, real-time export can NEVER stay smooth if you switch tabs.
+// The safe behaviour is: pause it cleanly when hidden, resume when you return,
+// so audio does not run ahead of video. Offline export is different: it seeks
+// frame by frame with source timestamps, not wall-clock time, so background
+// throttling only slows it down — it does not break sync. That is why offline
+// is now labelled "Safe to switch tabs".
+let wakeLockObj=null;
+async function requestWakeLock(){ try{ if(navigator.wakeLock && navigator.wakeLock.request){ wakeLockObj=await navigator.wakeLock.request('screen'); } }catch(e){ wakeLockObj=null; } }
+async function releaseWakeLock(){ try{ if(wakeLockObj && wakeLockObj.release) await wakeLockObj.release(); }catch(e){} wakeLockObj=null; }
+function waitForVisible(){
+  if(!document.hidden) return Promise.resolve();
+  return new Promise(res=>{ const onVis=()=>{ if(!document.hidden){ document.removeEventListener('visibilitychange', onVis); res(); } }; document.addEventListener('visibilitychange', onVis); });
+}
+let liveExportRec=null;
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && wakeLockObj===null && liveExportRec){ requestWakeLock(); }
+  if(!document.hidden && liveExportRec && liveExportRec.state==='paused'){ try{ liveExportRec.resume(); }catch(e){} }
+});
 // --- Export (canvas + MediaRecorder, real-time, local only) ---
 function pickMime(){
   const cands = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
@@ -1352,6 +1372,7 @@ async function exportClipOffline(c){
       await ffmpeg.writeFile('input.mp4', await offlineFetchFile(sourceFile));
       offlineInputWrittenFor=sourceIdentity;
     }
+    requestWakeLock();
     const dur=c.end-c.start;
     log(`Offline export: trimming ${fmtDuration(c.start)} to ${fmtDuration(c.end)}, then rendering at 30fps. This takes longer than the clip — keep this tab in front.`);
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
@@ -1365,6 +1386,7 @@ async function exportClipOffline(c){
     const a=document.createElement('a'); a.href=url; a.download=(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'-offline.mp4'; a.textContent='⬇ Download '+a.download+' ('+Math.round(blob.size/1048576*10)/10+' MB)'; a.style.display='block'; a.style.margin='8px 0';
     $('downloadArea').appendChild(a); a.click();
     c.exportStatus='exported'; $('progress').value=100;
+    releaseWakeLock();
     log('Offline export done: '+a.download+' — a proper 30fps file, not a live recording. If it did not download automatically, click the link above.');
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
     try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
@@ -1377,6 +1399,7 @@ async function exportClipOffline(c){
 }
 async function exportClipMedia(c,withCaptions=true){
   exportStop = false;
+  requestWakeLock();
   const mime = pickMime();
   const half = $('exportSize').value === 'half';
   const ow = half ? Math.round(c.outW/2/2)*2 : c.outW;
@@ -1403,11 +1426,12 @@ async function exportClipMedia(c,withCaptions=true){
   if(!audioCaptured) log('Note: this browser did not provide an audio track; the exported video may be silent.');
   const stream = new MediaStream(tracks);
   const rec = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 5000000} : undefined);
+  liveExportRec=rec;
   const chunks = [];
   rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
   const done = new Promise(res => { rec.onstop = res; });
   rec.start(250);
-  log('Exporting ' + c.name + (withCaptions?' with burned-in captions':' without captions')+' in real time… keep this tab in front. Format: ' + (mime || 'browser default'));
+  log('Exporting ' + c.name + (withCaptions?' with burned-in captions':' without captions')+' in real time… keep this tab in front. If you switch tabs, this live export will pause and resume when you return. To switch tabs freely, use Export Offline (smooth) instead. Format: ' + (mime || 'browser default'));
   // Draw loop — one draw per NEW video frame only, not per screen refresh.
   // Old code drew on requestAnimationFrame while the recorder sampled at 30fps separately,
   // so when drawing fell behind, the recorder repeated the last canvas frame — the sticking look.
@@ -1425,6 +1449,15 @@ async function exportClipMedia(c,withCaptions=true){
     }
   });
   while(video.currentTime < c.end && !exportStop){
+    if(document.hidden){
+      try{ video.pause(); }catch(e){}
+      try{ if(rec.state==='recording') rec.pause(); }catch(e){}
+      log('Live export paused — tab hidden. It will resume when you return to this tab, so audio does not run ahead of video. For switching tabs freely, use Export Offline (smooth) instead.');
+      await waitForVisible();
+      try{ if(rec.state==='paused') rec.resume(); }catch(e){}
+      try{ if(video.currentTime < c.end) await video.play(); }catch(e){}
+      log('Live export resumed — tab back in front.');
+    }
     if(video.currentTime === lastDrawnTime){
       await waitForNextFrame();
       if(video.currentTime === lastDrawnTime && video.currentTime < c.end){
@@ -1454,6 +1487,7 @@ async function exportClipMedia(c,withCaptions=true){
   video.pause();
   try{ rec.stop(); }catch(e){}
   await done;
+  liveExportRec=null; releaseWakeLock();
   $('progress').value = exportStop ? 0 : 100;
   if(exportStop){ log('Export cancelled; no download was created.'); return false; }
   const totalBytes=chunks.reduce((s,ch)=>s+(ch.size||0),0);
@@ -2355,7 +2389,7 @@ async function findBestMovementClips(){
   if(movementRunning) return;
   if(autopilotRunning){ $('movementStatus').textContent='Tracking is already running. Wait for it to finish, then press Find Best Movement Clips.'; return; }
   if(!video.videoWidth || !sourceName){ $('movementStatus').textContent='Load a video first, then pick a person, then press Find Best Movement Clips.'; return; }
-  movementRunning=true; autopilotStopRequested=false;
+  movementRunning=true; autopilotStopRequested=false; requestWakeLock();
   $('movementFind').disabled=true; $('movementStop').disabled=false;
   try{
     const fullDuration=video.duration||0;
@@ -2389,6 +2423,7 @@ async function findBestMovementClips(){
     const searchStart=Date.now();
     for(let idx=0; idx<times.length; idx++){
       if(autopilotStopRequested) break;
+      if(document.hidden){ $('movementStatus').textContent='Movement search paused — tab hidden. It will continue when you return to this tab.'; await waitForVisible(); }
       const t=times[idx];
       const elapsed=(Date.now()-searchStart)/1000;
       const avgPerSample=idx>0 ? elapsed/idx : 0.5;
@@ -2438,7 +2473,7 @@ async function findBestMovementClips(){
   }catch(err){
     $('movementStatus').textContent='Find Best Movement Clips failed: '+(err && err.message ? err.message : 'unknown error');
   }finally{
-    movementRunning=false; $('movementFind').disabled=false; $('movementStop').disabled=true;
+    movementRunning=false; releaseWakeLock(); $('movementFind').disabled=false; $('movementStop').disabled=true;
   }
 }
 $('movementFind').addEventListener('click', findBestMovementClips);
