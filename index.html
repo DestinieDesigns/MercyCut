@@ -90,6 +90,21 @@
   <h1>MercyCut Web v2 — Movement Clips</h1>
   <p class="homTag">ACCI House of Mercy • Worship • Word • Wonder</p>
   <button id="toggleHelp">Show instructions</button>
+  <button id="toggleTutorial">Watch tutorial</button>
+  <div id="tutorialText" hidden>
+  <h2 style="margin-top:0">Tutorial for House of Mercy M&amp;M — watch first, then use the app below</h2>
+  <p>Two short videos, made for the M&amp;M team. Videos do not load until you press play, so they do not slow the app down.</p>
+  <h3>1. Click-through tutorial — 1 minute 58 seconds (start here)</h3>
+  <p>Real MercyCut screen, gold ring and cursor on each button: Choose File, Find People Again, Clip Length, Find Best Movement Clips, Save Picked Clips, Export / Export Offline.</p>
+  <video controls preload="none" width="100%" src="house-of-mercy-mercycut-click-tutorial.mp4" style="max-width:900px;background:#000"></video>
+  <p><a href="house-of-mercy-mercycut-click-tutorial.mp4" download>Download click-through tutorial</a></p>
+  <h3>2. Step-by-step tutorial — 3 minutes 45 seconds (full explanation)</h3>
+  <p>Upload, pick a person, clip lengths, movement clips, tracking colours, the no-person rule, Live vs Offline export, and why to post the original file, not a Drive copy.</p>
+  <video controls preload="none" width="100%" src="house-of-mercy-mercycut-tutorial.mp4" style="max-width:900px;background:#000"></video>
+  <p><a href="house-of-mercy-mercycut-tutorial.mp4" download>Download step-by-step tutorial</a></p>
+  <p><strong>Checklist:</strong> Upload in Chrome directly (not a preview panel) &bull; Pick ONE person &bull; Choose clip length &bull; Find Best Movement Clips &bull; Wait for 100% with no lost moments &bull; Tick your clips &bull; Save Picked Clips — Offline if you need to switch tabs &bull; Post the ORIGINAL file, 9:16 or 5:8.</p>
+  <p class="warn">If you downloaded only this app file by itself, the videos above will not play — keep the two tutorial video files in the same folder as this file, or watch them on the MercyCut website where they are already included.</p>
+  </div>
   <div id="helpText" hidden>
   <p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips. Captions can be added somewhere else later if you want them — they are not needed here.</p>
   <p><strong>No Python. No install. No upload.</strong> Open this file in Chrome or Edge, pick a video from your computer, and edit it right in this tab. Your video never leaves this device — there is no server here to send it to.</p>
@@ -2516,6 +2531,7 @@ async function findBestMovementClips(){
 }
 $('movementFind').addEventListener('click', findBestMovementClips);
 if($('toggleHelp')) $('toggleHelp').addEventListener('click', ()=>{ const h=$('helpText'); if(!h) return; h.hidden=!h.hidden; $('toggleHelp').textContent=h.hidden?'Show instructions':'Hide instructions'; });
+if($('toggleTutorial')) $('toggleTutorial').addEventListener('click', ()=>{ const h=$('tutorialText'); if(!h) return; h.hidden=!h.hidden; $('toggleTutorial').textContent=h.hidden?'Hide tutorial':'Watch tutorial'; });
 if($('testOfflineExporter')) $('testOfflineExporter').addEventListener('click', async ()=>{ try{ $('movementStatus').textContent='Testing offline exporter…'; await loadOfflineFFmpeg(); $('movementStatus').textContent='Offline exporter loaded OK. Now press Export Offline (smooth) on a clip.'; log('Offline exporter test: loaded OK.'); }catch(e){ $('movementStatus').textContent='Offline exporter test failed: '+(e.message||e); } });
 $('movementStop').addEventListener('click', ()=>{ autopilotStopRequested=true; trackStop=true; $('movementStatus').textContent='Stopping movement search after the current sample...'; });
 function applyMovementPreset(step, size, smooth, label){
