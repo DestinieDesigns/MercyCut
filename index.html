@@ -206,6 +206,9 @@
         <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Clip length <select id="movementClipLength"><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="60">1 minute</option><option value="120" selected>2 minutes</option><option value="300">5 minutes</option></select></label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
         <div class="row"><button id="movementFind">Find Best Movement Clips</button><button id="movementStop" disabled>Stop Movement Search</button></div>
         <div class="row"><button id="testOfflineExporter">Test offline exporter (loads it, no clip needed)</button></div>
+        <h4 style="margin-bottom:0">Voice timing fix — for an original that is already out of sync</h4>
+        <div class="row"><label>Audio delay <input id="audioDelayMs" type="range" min="-5000" max="5000" step="100" value="0" style="width:200px"> <span id="audioDelayLabel">0 ms — in sync</span></label><button id="audioDelayReset">Reset to 0</button></div>
+        <p style="font-size:0.9em">If you hear the voice BEFORE the lips move, move the slider to + (this delays the voice). If you hear the voice AFTER the lips move — for example, 1 to 3 seconds late — move it to - (this brings the voice earlier). The slider goes up to 5 seconds either way. Set it once for that livestream, then use Export Offline (smooth) — the fix is applied there. Test it on one short clip first, and move it in 500 ms steps until the lips match. Live Export cannot shift audio cleanly in real time, so for a delayed original, always use Export Offline.</p>
         <p><b>Refine what counts as a person (logos):</b> Logos are usually small, in a corner, and never move. A real person is bigger and moves. Use these to stop logo hands being picked up as a person.</p>
         <div class="row"><label>Only pick people I am sure about <select id="personConfidence"><option value="0.5">50% sure (more people, more false logos)</option><option value="0.65" selected>65% sure (balanced)</option><option value="0.8">80% sure (only very sure people)</option></select></label><label>Minimum person size <select id="personMinSize"><option value="0">Any size</option><option value="medium" selected>Medium (at least 15% wide, 25% tall)</option><option value="large">Large (at least 25% wide, 40% tall)</option></select></label><label><input id="personIgnoreCorners" type="checkbox" checked> Ignore small people in corners (logos)</label></div>
         <div id="movementEstimate" class="captionStatus" aria-live="polite">Load a video to see time estimates. Estimates update when you change any option above.</div>
@@ -1393,6 +1396,9 @@ function buildOfflineCropFilter(c, sw, sh, ow, oh){
   const expr=build(0);
   return `crop=${cw}:${ch}:x='${expr}':y=0,scale=${ow}:${oh},setsar=1,format=yuv420p`;
 }
+function getAudioDelayMs(){ const el=$('audioDelayMs'); if(!el) return 0; const v=parseInt(el.value,10); return isNaN(v)?0:Math.max(-5000,Math.min(5000,v)); }
+function audioDelayLabelText(ms){ if(!ms) return '0 ms — in sync'; if(ms>0) return '+'+ms+' ms — voice later'; return ms+' ms — voice earlier'; }
+function buildOfflineAudioFilter(ms, dur){ if(!ms) return null; if(ms>0) return 'adelay='+ms+':all=1,apad,atrim=0:'+dur; return 'atrim=start='+(Math.abs(ms)/1000)+',asetpts=PTS-STARTPTS,apad,atrim=0:'+dur; }
 async function exportClipOffline(c){
   if(activeExportIds.size){ log('Wait for the current export to finish before starting an offline export.'); return; }
   if(!trackingExportReady(c)){ log('Offline export needs tracking to reach 100% first.'); return; }
@@ -1419,7 +1425,12 @@ async function exportClipOffline(c){
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
     try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
     let code=await ffmpeg.exec(['-ss', String(c.start), '-t', String(dur), '-i', 'input.mp4', '-c', 'copy', 'segment.mp4']); if(typeof code==='number' && code!==0) throw new Error('Trim step failed (FFmpeg code '+code+').');
-    code=await ffmpeg.exec(['-i', 'segment.mp4', '-vf', filter, '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4']); if(typeof code==='number' && code!==0) throw new Error('Render step failed (FFmpeg code '+code+').');
+    const audioDelayMs=getAudioDelayMs(); const audioFilter=buildOfflineAudioFilter(audioDelayMs, dur);
+    if(audioDelayMs) log('Offline export: voice timing fix '+audioDelayLabelText(audioDelayMs)+' will be applied to the audio.');
+    const renderArgs=['-i', 'segment.mp4', '-vf', filter, '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p'];
+    if(audioFilter) renderArgs.push('-af', audioFilter);
+    renderArgs.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4');
+    code=await ffmpeg.exec(renderArgs); if(typeof code==='number' && code!==0) throw new Error('Render step failed (FFmpeg code '+code+').');
     const data=await ffmpeg.readFile('output.mp4');
     if(!data || !data.byteLength) throw new Error('Offline export produced an empty output file.');
     const blob=new Blob([data.buffer.slice(data.byteOffset, data.byteOffset+data.byteLength)], {type:'video/mp4'});
@@ -1465,6 +1476,7 @@ async function exportClipMedia(c,withCaptions=true){
     if(vs){ const audio=vs.getAudioTracks(); tracks = tracks.concat(audio); audioCaptured=audio.length>0; }
   }catch(e){ log('Note: audio track could not be captured in this browser; export may be silent.'); }
   if(!audioCaptured) log('Note: this browser did not provide an audio track; the exported video may be silent.');
+  if(getAudioDelayMs()) log('Note: voice timing fix is NOT applied in live Export — it only works in Export Offline (smooth). For a delayed original, cancel this and use Export Offline.');
   const stream = new MediaStream(tracks);
   const rec = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 5000000} : undefined);
   liveExportRec=rec;
@@ -2536,6 +2548,8 @@ async function findBestMovementClips(){
 $('movementFind').addEventListener('click', findBestMovementClips);
 if($('toggleHelp')) $('toggleHelp').addEventListener('click', ()=>{ const h=$('helpText'); if(!h) return; h.hidden=!h.hidden; $('toggleHelp').textContent=h.hidden?'Show instructions':'Hide instructions'; });
 if($('toggleTutorial')) $('toggleTutorial').addEventListener('click', ()=>{ const h=$('tutorialText'); if(!h) return; h.hidden=!h.hidden; $('toggleTutorial').textContent=h.hidden?'Hide tutorial':'Watch tutorial'; });
+if($('audioDelayMs')) $('audioDelayMs').addEventListener('input', ()=>{ if($('audioDelayLabel')) $('audioDelayLabel').textContent=audioDelayLabelText(getAudioDelayMs()); });
+if($('audioDelayReset')) $('audioDelayReset').addEventListener('click', ()=>{ if($('audioDelayMs')) $('audioDelayMs').value='0'; if($('audioDelayLabel')) $('audioDelayLabel').textContent='0 ms — in sync'; log('Voice timing reset to 0.'); });
 if($('testOfflineExporter')) $('testOfflineExporter').addEventListener('click', async ()=>{ try{ $('movementStatus').textContent='Testing offline exporter…'; await loadOfflineFFmpeg(); $('movementStatus').textContent='Offline exporter loaded OK. Now press Export Offline (smooth) on a clip.'; log('Offline exporter test: loaded OK.'); }catch(e){ $('movementStatus').textContent='Offline exporter test failed: '+(e.message||e); } });
 $('movementStop').addEventListener('click', ()=>{ autopilotStopRequested=true; trackStop=true; $('movementStatus').textContent='Stopping movement search after the current sample...'; });
 function applyMovementPreset(step, size, smooth, label){
