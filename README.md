@@ -10,10 +10,16 @@ Simple web app, no prompt, no captions needed.
 Tracking speed & smoothness can be changed in the Movement card:
 Fastest, Fast & Smooth, Most Accurate, Smoothest, plus individual controls.
 
+Clips are saved automatically in this browser (local storage), so a refresh or an
+accidentally closed tab does not lose your work. Only the project is stored — not the
+video file — so open the same video again to preview and export. "Clear clips" in the
+Clip Library starts a fresh session, and "Save Project" still downloads a JSON copy you
+can keep or move to another computer.
+
 Open `index.html` in Chrome directly (not in a preview panel).
 No video is uploaded — everything runs in the browser tab, except the first-time
-downloads of the person-detection model and, if used, Whisper models in older versions.
-This v2 version does not use Whisper or captions.
+download of the person-detection model. This v2 version has no captions, no
+transcripts and no Whisper: movement clips only.
 
 ## GitHub Pages
 
