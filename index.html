@@ -259,7 +259,7 @@
         </div>
         <div class="row"><label for="trackingSmoothness">Crop smoothness <input id="trackingSmoothness" type="range" min="0" max="100" value="55"></label><span id="trackingSmoothnessValue">55%</span></div>
         <p>Tracking follows the detected person whose centre is nearest to the last position, within 60% of the video width, with at least 50% confidence. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
-        <p>Privacy and downloads: your video stays in this tab. First use downloads TensorFlow.js and COCO-SSD from jsDelivr; only video frames being analyzed are used locally. The page has no analytics or upload feature. TensorFlow.js and the COCO-SSD model are Apache-2.0.</p>
+        <p>Privacy and downloads: your video stays in this tab. First use downloads MediaPipe's vision runtime from jsDelivr and the EfficientDet-Lite2 person model from Google; only video frames being analyzed are used locally. The page has no analytics or upload feature. MediaPipe and the EfficientDet-Lite0 model are Apache-2.0.</p>
         <progress id="trackProgress" value="0" max="100"></progress>
         <div id="trackStatus" aria-live="polite">Tracking has not run for this clip.</div>
         <div id="keyList"></div>
@@ -851,12 +851,29 @@ function loadScript(src){
     document.head.appendChild(s);
   });
 }
+// Person detector: MediaPipe EfficientDet-Lite2 (int8), the same interface COCO-SSD
+// had — detect(canvas) -> [{class,score,bbox:[x,y,w,h]}] — so every call site is unchanged.
+// Lite2 rather than Lite0 on purpose: on distant people Lite0 scores 0.43-0.50 against
+// this app's 0.50 gate, so it drops people the old detector kept (false "person left").
+// Lite2 scores 0.63+ on the same frames. CPU delegate on purpose: MediaPipe's GPU
+// delegate is ~15x slower on software WebGL (1070 ms vs ~190 ms) for the same model.
+const DETECTOR_MODULE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm';
+const DETECTOR_WASM='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+const DETECTOR_MODEL='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite';
 async function loadCoco(){
   if(cocoModel)return cocoModel;
   if(!cocoLoadPromise)cocoLoadPromise=(async()=>{
-    if(!window.tf)await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js');
-    if(!window.cocoSsd)await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js');
-    cocoModel=await cocoSsd.load(); return cocoModel;
+    const vision=await import(DETECTOR_MODULE);
+    const fileset=await vision.FilesetResolver.forVisionTasks(DETECTOR_WASM);
+    const detector=await vision.ObjectDetector.createFromOptions(fileset,{
+      baseOptions:{modelAssetPath:DETECTOR_MODEL,delegate:'CPU'},
+      runningMode:'IMAGE',scoreThreshold:0.15,maxResults:20,categoryAllowlist:['person']
+    });
+    cocoModel={ ready:true, close:()=>detector.close(), detect:canvas=>{
+      const res=detector.detect(canvas);
+      return (res&&res.detections?res.detections:[]).map(d=>({class:'person',score:d.categories[0].score,bbox:[d.boundingBox.originX,d.boundingBox.originY,d.boundingBox.width,d.boundingBox.height]}));
+    }};
+    return cocoModel;
   })().catch(err=>{cocoLoadPromise=null;throw err;});
   return cocoLoadPromise;
 }
