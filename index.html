@@ -142,7 +142,7 @@
       <div class="clipTools">
         <input id="clipSearch" type="search" placeholder="Search clips" aria-label="Search clips">
         <select id="clipSort" aria-label="Sort clips"><option value="created">Created order</option><option value="start">Start time</option><option value="duration">Duration</option></select>
-        <select id="clipFilter" aria-label="Filter by tracking status"><option value="all">All tracking statuses</option><option value="queued">Tracking queued</option><option value="in-progress">Tracking in progress</option><option value="ready">Tracking ready</option><option value="needs-review">Needs tracking review</option><option value="failed">Tracking failed</option><option value="waiting-target">Select a person</option></select>
+        <select id="clipFilter" aria-label="Filter by tracking status"><option value="all">All tracking statuses</option><option value="queued">Tracking queued</option><option value="in-progress">Tracking in progress</option><option value="ready">Tracking ready</option><option value="needs-review">Needs tracking review</option><option value="failed">Tracking failed</option><option value="no-person">No person in scene</option><option value="waiting-target">Select a person</option></select>
         <select id="approvalFilter" aria-label="Filter by approval status"><option value="all">All approval states</option><option value="suggested">Suggested</option><option value="needs-review">Needs review</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
         <select id="exportFilter" aria-label="Filter export status"><option value="all">Any export status</option><option value="not-exported">Not exported</option><option value="exported">Exported</option><option value="failed">Export failed</option></select>
       </div>
@@ -261,7 +261,8 @@
           <button id="stopTrack">Stop Tracking</button>
         </div>
         <div class="row"><label for="trackingSmoothness">Crop smoothness <input id="trackingSmoothness" type="range" min="0" max="100" value="55"></label><span id="trackingSmoothnessValue">55%</span></div>
-        <p>Tracking follows the detected person whose centre is nearest to the last position, within 60% of the video width, with at least 50% confidence. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
+        <div class="row"><label for="trackingDetail">Track every <select id="trackingDetail"><option value="frame" selected>frame (smoothest — slowest)</option><option value="0.1">0.1 s (very detailed)</option><option value="0.5">0.5 s (faster)</option><option value="1">1 s (fastest)</option></select></label><span class="statusLine">Every frame follows all 30 frames per second. Tracking keeps running when you switch tabs or minimise this window, and the person is retried on every frame before a moment is treated as empty.</span></div>
+        <p>Tracking follows the detected person whose centre is nearest to the last position. Each frame is tried twice — nearest match within 60% of the video width at 50% confidence, then a relaxed match within 90% at 35% — and any frame still empty is retried at full resolution before it counts as “no person”. A clip is only cut across moments where a person was found: footage where nobody is detected is trimmed off the ends, and a gap in the middle splits the clip into separate clips. Manual keyframes can still correct any sample.</p>
         <p>Privacy and downloads: your video stays in this tab. First use downloads MediaPipe's vision runtime from jsDelivr and the EfficientDet-Lite2 person model from Google; only video frames being analyzed are used locally. The page has no analytics or upload feature: a cloud link you paste is only opened in a new tab, and the clip is saved on your device for you to drop in. MediaPipe and the EfficientDet-Lite0 model are Apache-2.0.</p>
         <progress id="trackProgress" value="0" max="100"></progress>
         <div id="trackStatus" aria-live="polite">Tracking has not run for this clip.</div>
@@ -634,11 +635,11 @@ function lostSampleTimes(c){return ((c&&c.track)||[]).filter(p=>p.lost).map(p=>M
 function renderLostJumps(c){
   const box=$('lostJump');if(!box)return;
   box.innerHTML='';
-  const times=lostSampleTimes(c);
+  const allTimes=lostSampleTimes(c),times=allTimes.slice(0,12);
   if(!times.length){box.style.display='none';return;}
   box.style.display='flex';
   const label=document.createElement('span');label.className='mutedSmall';
-  label.textContent='Fix lost samples — jump to:';
+  label.textContent='Fix lost samples — jump to'+(allTimes.length>times.length?' (first '+times.length+' of '+allTimes.length+')':'')+':';
   box.appendChild(label);
   times.forEach(t=>{
     const b=document.createElement('button');b.type='button';b.className='jumpChip';b.textContent='↦ '+fmtFull(t);
@@ -654,12 +655,12 @@ function renderLostJumps(c){
 }
 function clipTrackingLabel(c){
   let status=c.trackingStatus||((c.track||[]).length?'needs-review':'not-tracked');if(status==='ready'&&!c.trackingValidated)status='needs-review';
-  const names={'queued':'Tracking Queued','waiting-target':'Needs Tracking Review · Select a person','in-progress':'Tracking in Progress','ready':'Tracking Ready','needs-review':'Needs Tracking Review','failed':'Tracking Failed','not-tracked':'Not tracked'};
+  const names={'queued':'Tracking Queued','waiting-target':'Needs Tracking Review · Select a person','in-progress':'Tracking in Progress','ready':'Tracking Ready','needs-review':'Needs Tracking Review','failed':'Tracking Failed','no-person':'No person in this scene — not clipped','not-tracked':'Not tracked'};
   const lost=(c.track||[]).filter(p=>p.lost||p.lowConfidence).length;
   return (names[status]||'Needs Tracking Review')+(status==='in-progress'?' · '+(c.trackingProgress||0)+'%':'')+(lost?' · '+lost+' uncertain sample(s)':'')+(c.trackingError?' · '+c.trackingError:'');
 }
 function markClipEdited(c){c.reviewed=false;c.reviewPlaybackComplete=false;c.reviewPlaybackProgress=0;if(clipReviewSession&&clipReviewSession.clipId===c.id)clipReviewSession=null;if(['approved','suggested','rejected'].includes(c.approvalState)){c.approvalState='needs-review';c.approvedAt=null;c.rejectedAt=null;}c.exportOutdated=!!(c.exportedAt||c.exportStatus==='exported'||c.exportOutdated);c.exportStatus='not-exported';c.exportError='';}
-function approvalLabel(c){ if(!c) return 'No clip'; if(trackingExportReady(c)) return 'Ready to export'; if(c.trackingStatus==='in-progress') return 'Tracking...'; return 'Not tracked yet'; }
+function approvalLabel(c){ if(!c) return 'No clip'; if(c.trackingStatus==='no-person') return 'No person in scene — not clipped'; if(trackingExportReady(c)) return 'Ready to export'; if(c.trackingStatus==='in-progress') return 'Tracking...'; return 'Not tracked yet'; }
 function isApprovedClip(c){ return !!c && trackingExportReady(c); }
 // Standing rule (Shia, 2026-10-31): anywhere no person is detected must NEVER be used.
 // A lost sample (person not found at that time) is not a crop position — it is a gap.
@@ -1051,64 +1052,187 @@ function trackingCacheFor(sid,targetId){
   if(!sourceTrackingCache.has(key))sourceTrackingCache.set(key,new Map());
   return sourceTrackingCache.get(key);
 }
+// --- Frame-by-frame tracking ---
+// Tracking must survive a hidden tab: setTimeout is throttled there, so the per-frame
+// yield goes through a MessageChannel, and a silent audio node keeps the tab awake.
+const TRACK_MIN_SEGMENT=1.0; // seconds of continuous person-present footage a cut clip needs
+let trackingKeepAlive=null;
+function keepTrackingAlive(on){
+  try{
+    if(on){
+      if(trackingKeepAlive&&trackingKeepAlive.ctx){if(trackingKeepAlive.ctx.state==='suspended')trackingKeepAlive.ctx.resume();return;}
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return;
+      const ctx=new AC(),osc=ctx.createOscillator(),gain=ctx.createGain();
+      gain.gain.value=0.0001;
+      osc.connect(gain);gain.connect(ctx.destination);osc.start();
+      if(ctx.state==='suspended')ctx.resume();
+      trackingKeepAlive={ctx,osc,gain};
+    }else if(trackingKeepAlive){
+      try{trackingKeepAlive.osc.stop();trackingKeepAlive.ctx.close();}catch(e){}
+      trackingKeepAlive=null;
+    }
+  }catch(e){}
+}
+const trackingYieldNow=(()=>{
+  const channel=new MessageChannel(),waiting=[];
+  channel.port1.onmessage=()=>{const next=waiting.shift();if(next)next();};
+  return ()=>new Promise(resolve=>{waiting.push(resolve);channel.port2.postMessage(0);});
+})();
+function trackingStepSeconds(){
+  const el=$('trackingDetail');
+  if(!el||el.value==='frame')return 0; // 0 = every frame
+  const n=parseFloat(el.value);
+  return Number.isFinite(n)&&n>0?n:0;
+}
+function trackingFrameTimes(start,end){
+  const fps=30,step=trackingStepSeconds(),safe=step>0?step:1/fps,times=[];
+  for(let t=start;t<end-0.0005;t+=safe)times.push(Math.round(t*1000)/1000);
+  times.push(Math.round(end*1000)/1000);
+  return times;
+}
+async function detectPeopleForTracking(v,ctx,canvas,model,scale){
+  ctx.drawImage(v,0,0,canvas.width,canvas.height);
+  const preds=await model.detect(canvas);
+  return preds.filter(p=>p.class==='person').map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
+}
+function nearestPerson(persons,target,maxDistance,minScore){
+  let best=null,bestDistance=Infinity;
+  for(const p of persons){
+    const d=Math.hypot(p.cx-target.cx,p.cy-target.cy);
+    if(d<bestDistance){bestDistance=d;best=p;}
+  }
+  return best&&bestDistance<=maxDistance&&best.confidence>=minScore?best:null;
+}
+// Runs of consecutive frames where a person was found, long enough to be a clip.
+function foundRuns(points){
+  const runs=[];let current=null;
+  for(const p of points){
+    if(!p.lost){if(!current){current=[];runs.push(current);}current.push(p);}
+    else current=null;
+  }
+  return runs.filter(r=>r.length>=2&&(r[r.length-1].t-r[0].t)>=TRACK_MIN_SEGMENT-0.001);
+}
 async function runAutomaticTracking(c){
   const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...selectedAnchor},sid=c.sourceIdentity||sourceIdentity;
   if(!anchor||!targetId)throw new Error('Select the person to follow once in the source video.');
   if(c.sourceName&&c.sourceName!==sourceName)throw new Error('Load the matching source video: '+c.sourceName+'.');
   if(sid!==sourceIdentity)throw new Error('Tracking target belongs to a different source recording.');
-  c.trackingStatus='in-progress';c.trackingProgress=0;renderClips();
+  c.trackingStatus='in-progress';c.trackingProgress=0;c.trackingAttempts=0;renderClips();
   const isMovementClip=c.creationMethod==='auto-movement';
-  const movementStep=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
-  const trackStep=isMovementClip? movementStep : (movementStep<=0.1 ? movementStep : 0.5);
   const trackSize=isMovementClip? (parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512) || 512) : 640;
   const model=await loadCoco(),v=await ensureTrackingVideo(),scale=Math.min(1,trackSize/v.videoWidth);
   const canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.round(v.videoWidth*scale));canvas.height=Math.max(1,Math.round(v.videoHeight*scale));
   const ctx=canvas.getContext('2d');
   const cache=trackingCacheFor(sid,targetId);
-  const times=[c.start];for(let t=Math.ceil(c.start/trackStep)*trackStep;t<c.end-.01;t+=trackStep)if(t>c.start+.01)times.push(t);if(c.end>c.start+.01)times.push(c.end);
-  let last=anchor,points=[],lost=0,uncertain=0,lostTimes=[];
-  for(let n=0;n<times.length;n++){
-    if(trackStop)throw new Error('Tracking was cancelled.');
-    if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
-    const t=times[n],key=t.toFixed(3),cached=cache.get(key);
-    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t); if(!point.lost) pushMotionTrail(t, point.cx, point.cy);}
-    else{
-      await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
-      const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
-      const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.01,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.60&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.50?candidate:null;
-      const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
-      cache.set(key,point);points.push(point);if(best){last={cx:best.cx,cy:best.cy};lastTrackBox={w:best.w,h:best.h};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;
-      renderTrackingOverlay(persons, best, point, t); if(best) pushMotionTrail(t, best.cx, best.cy);
+  const times=trackingFrameTimes(c.start,c.end);
+  if(times.length>4000)log('This clip needs '+times.length+' frame checks, which will take a while. Tracking saves as it goes: leave the tab open and you can switch away.');
+  let last=anchor,points=[],lostTimes=[],relaxedCount=0;
+  const startedAt=Date.now();
+  keepTrackingAlive(true);requestWakeLock();
+  try{
+    for(let n=0;n<times.length;n++){
+      if(trackStop)throw new Error('Tracking was cancelled.');
+      if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
+      const t=times[n],key=t.toFixed(3),cached=cache.get(key);
+      let persons=[],best=null,point;
+      if(cached){point={...cached};}
+      else{
+        await seekTrackingVideo(v,t);
+        persons=await detectPeopleForTracking(v,ctx,canvas,model,scale);
+        best=nearestPerson(persons,last,v.videoWidth*.60,.50);
+        if(!best){
+          // Retry the same frame with a looser match before this frame counts as empty.
+          best=nearestPerson(persons,last,v.videoWidth*.90,.35);
+          if(best)relaxedCount++;
+        }
+        point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false}:{t,cx:last.cx,cy:last.cy,confidence:0,lost:true};
+        cache.set(key,point);
+      }
+      points.push(point);
+      if(point.lost)lostTimes.push(t);
+      else{last={cx:point.cx,cy:point.cy};if(best)lastTrackBox={w:best.w,h:best.h};pushMotionTrail(t,point.cx,point.cy);}
+      const done=n+1,elapsed=(Date.now()-startedAt)/1000,perFrame=elapsed/Math.max(1,done),remaining=Math.round(perFrame*(times.length-done));
+      c.trackingProgress=Math.round(done/times.length*100);
+      if(sel===clips.indexOf(c)){
+        $('trackProgress').value=c.trackingProgress;
+        $('trackStatus').textContent='Tracking frame '+done+' of '+times.length+' · '+c.trackingProgress+'%'+(lostTimes.length?' · '+lostTimes.length+' frame(s) with no person so far (each is retried after this pass)':'')+(remaining>0?' · about '+fmtDuration(remaining)+' left':'')+' · safe to switch tabs';
+      }
+      if(n%15===0){renderTrackingOverlay(persons,best,point,t);if(n%60===0)renderClips();}
+      await trackingYieldNow();
     }
-    c.trackingProgress=Math.round((n+1)/times.length*100);
-    if(sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
-    if(n%12===0)renderClips();
-    await new Promise(resolve=>setTimeout(resolve,0));
+  }finally{
+    keepTrackingAlive(false);releaseWakeLock();
   }
-  const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
-  if(lostTimes.length) log('Tracking lost at: '+lostTimes.slice(0,20).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>20?' … ('+lostTimes.length+' total)':'')+' — those are the times the box turned red.');
-  if(!valid)throw new Error('Tracking samples did not cover the full clip range.');
-  c.track=points;c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;
-  if(lost>0){
-    // Rule: no-person moments are never used. Do NOT mark ready/approved/reviewed.
-    // The clip stays Needs Tracking Review until the user corrects the lost times
-    // (click the person at a lost time / add a keyframe there) or trims the clip
-    // to exclude them, then retries tracking.
-    c.trackingStatus='needs-review';c.trackingValidated=false;c.approvalState='needs-review';c.reviewed=false;
-    c.trackingError=lost+' sample(s) with NO person detected — those moments will not be used for export. Lost at: '+lostTimes.slice(0,10).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>10?' …':'')+'. Correct them with a keyframe at each lost time, or trim the clip to exclude them, then Retry Tracking.';
-  } else {
-    c.trackingStatus='ready';c.trackingError='';c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
-    if(uncertain)c.trackingError=uncertain+' low-confidence or ambiguous sample(s) held at the last reliable position (a person WAS detected, just with low confidence).';
+  // Second pass: frames that are still empty get one more try, at full resolution,
+  // aimed between the nearest frames where the person WAS found. Only then is a
+  // frame treated as having nobody in it.
+  const missing=points.filter(p=>p.lost);
+  let recovered=0;
+  if(missing.length){
+    const fullCanvas=document.createElement('canvas');fullCanvas.width=v.videoWidth;fullCanvas.height=v.videoHeight;
+    const fullCtx=fullCanvas.getContext('2d');
+    try{
+      keepTrackingAlive(true);
+      for(let i=0;i<missing.length;i++){
+        if(trackStop)break;
+        const p=missing[i],index=points.indexOf(p);
+        const before=points.slice(0,index).reverse().find(q=>!q.lost),after=points.slice(index+1).find(q=>!q.lost);
+        const aim=before&&after?{cx:(before.cx+after.cx)/2,cy:(before.cy+after.cy)/2}:(before||after||last);
+        try{
+          await seekTrackingVideo(v,p.t);
+          const persons=await detectPeopleForTracking(v,fullCtx,fullCanvas,model,1);
+          const found=nearestPerson(persons,aim,v.videoWidth*.45,.30);
+          if(found){p.cx=found.cx;p.cy=found.cy;p.confidence=found.confidence;p.lost=false;p.recovered=true;recovered++;cache.set(p.t.toFixed(3),{...p});last={cx:p.cx,cy:p.cy};}
+        }catch(err){}
+        if(sel===clips.indexOf(c))$('trackStatus').textContent='Retrying frames where no person was found: '+(i+1)+' of '+missing.length+' (recovered '+recovered+')…';
+        await trackingYieldNow();
+      }
+    }finally{keepTrackingAlive(false);releaseWakeLock();}
+    lostTimes=points.filter(p=>p.lost).map(p=>p.t);
+    log('Retried '+missing.length+' frame(s) with no person at full resolution: '+recovered+' recovered.');
   }
-  if(lost<=0) c.reviewed=true;c.exportStatus='not-exported';c.exportError='';projectDirty=true;renderClips();
+  c.track=points;c.trackingProgress=100;c.trackingTargetId=targetId;c.sourceIdentity=sid;c.trackingAttempts=0;
+  const runs=foundRuns(points);
+  if(!runs.length){
+    c.trackingStatus='no-person';c.trackingValidated=false;c.approvalState='rejected';c.reviewed=false;
+    c.trackingError='No person was found anywhere in this scene ('+points.length+' frames checked, every empty frame retried), so no clip was cut. Nothing from this range will be exported.';
+    c.exportStatus='not-exported';c.exportError='';projectDirty=true;renderClips();
+    if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);renderLostJumps(c);drawPreview();}
+    log('No clip cut for '+c.name+': nobody was found in that scene after '+points.length+' frame checks and a full-resolution retry.');
+    return;
+  }
+  const originalStart=c.start,originalEnd=c.end;
+  const parts=runs.map(run=>({start:run[0].t,end:run[run.length-1].t,track:run}));
+  const extras=[];
+  parts.slice(1).forEach((part,index)=>{
+    const clone=JSON.parse(JSON.stringify(c));
+    clone.id=newClipId();clone.number=Math.max(0,...clips.map(x=>x.number||0))+1;
+    clone.name=c.name+' (part '+(index+2)+')';
+    clone.start=part.start;clone.end=part.end;clone.track=part.track;clone.keys=[];
+    clone.trackingStatus='ready';clone.trackingValidated=true;clone.approvalState='approved';clone.reviewed=true;
+    clone.trackingProgress=100;clone.trackingError='';clone.exportStatus='not-exported';clone.exportError='';clone.batchSelected=false;clone.trackingAttempts=0;
+    extras.push(clone);
+  });
+  c.start=parts[0].start;c.end=parts[0].end;c.track=parts[0].track;
+  c.keys=(c.keys||[]).filter(k=>k.t>=c.start-0.05&&k.t<=c.end+0.05);
+  c.trackingStatus='ready';c.trackingValidated=true;c.approvalState='approved';c.reviewed=true;
+  c.trackingError=relaxedCount?relaxedCount+' frame(s) needed the looser match; a person was still found on every one of them.':'';
+  c.exportStatus='not-exported';c.exportError='';
+  if(extras.length)clips.push(...extras);
+  projectDirty=true;renderClips();
   if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);renderLostJumps(c);drawPreview();}
-  log('Automatic tracking '+(uncertain?'needs review':'ready')+' for '+c.name+': '+points.length+' timestamped samples across '+(c.end-c.start).toFixed(1)+' seconds.');
+  const trimmed=Math.abs(originalStart-c.start)>0.001||Math.abs(originalEnd-c.end)>0.001;
+  log('Tracking ready for '+c.name+': '+c.track.length+' frames at '+(trackingStepSeconds()?'every '+trackingStepSeconds()+'s':'every frame')+', all person-present.'+(trimmed?' Trimmed to '+fmtFull(c.start)+'–'+fmtFull(c.end)+' because nobody was found outside that range.':'')+(extras.length?' Split into '+extras.length+' extra clip(s) around the moments with no person.':''));
 }
 async function processTrackingQueue(){
   if(trackingQueueRunning||!selectedAnchor||!trackingTargetId||!video.videoWidth||activeExportIds.size)return;
   trackingQueueRunning=true;
-  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);if(err.detectorLoad){const rest=trackingQueue.splice(0);rest.forEach(qid=>{const q=clips.find(x=>x.id===qid);if(q&&q.trackingStatus==='queued'){q.trackingStatus='failed';q.trackingValidated=false;q.trackingError=err.message;}});log('Stopped the tracking queue: the person detector could not load, so no clip was marked as having "no person".');}}renderClips();}finally{trackBusy=false;trackStop=false;}}
+  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{
+          const attempts=(c.trackingAttempts||0)+1;c.trackingAttempts=attempts;
+          if(!err.detectorLoad&&attempts<=2){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);log('Automatic tracking for '+c.name+' hit a snag ('+(err.message||err)+') — retrying automatically ('+attempts+' of 2).');renderClips();continue;}
+          c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);if(err.detectorLoad){const rest=trackingQueue.splice(0);rest.forEach(qid=>{const q=clips.find(x=>x.id===qid);if(q&&q.trackingStatus==='queued'){q.trackingStatus='failed';q.trackingValidated=false;q.trackingError=err.message;}});log('Stopped the tracking queue: the person detector could not load, so no clip was marked as having "no person".');}}renderClips();}finally{trackBusy=false;trackStop=false;}}
   }finally{trackingQueueRunning=false;retiredTrackingUrls.forEach(url=>URL.revokeObjectURL(url));retiredTrackingUrls=[];}
   setTimeout(autoSaveReadyClips,0);
 }
@@ -1191,11 +1315,13 @@ document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden && liveExportRec && liveExportRec.state==='paused'){ try{ liveExportRec.resume(); }catch(e){} }
 });
 // --- Export (canvas + MediaRecorder, real-time, local only) ---
-function pickMime(){
-  const cands = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
-  for(const m of cands){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
-  return '';
+function mimeCandidates(){
+  const cands = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const usable = [];
+  for(const m of cands){ try{ if(MediaRecorder.isTypeSupported(m)) usable.push(m); }catch(e){} }
+  return usable;
 }
+function pickMime(){ return mimeCandidates()[0] || ''; }
 
 // --- Offline Smooth Export (frame-by-frame, not live) ---
 // Live export draws and records at the same time, so on a PC without a dedicated
@@ -1330,13 +1456,21 @@ async function exportClipMedia(c){
   if(!audioCaptured) log('Note: this browser did not provide an audio track; the exported video may be silent.');
   if(getAudioDelayMs()) log('Note: voice timing fix is NOT applied in live Export — it only works in Export Offline (smooth). For a delayed original, cancel this and use Export Offline.');
   const stream = new MediaStream(tracks);
-  const rec = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 5000000} : undefined);
+  // isTypeSupported can say yes while the encoder still refuses to start (seen on
+  // some Chromium builds with MP4), so try each usable format and fall back.
+  let rec = null, usedMime = mime, recError = null;
+  const tries = mime ? [mime, ...mimeCandidates().filter(m => m !== mime)] : mimeCandidates();
+  for(const candidate of (tries.length ? tries : [''])) {
+    try { rec = new MediaRecorder(stream, candidate ? {mimeType: candidate, videoBitsPerSecond: 5000000} : undefined); usedMime = candidate || ''; break; }
+    catch(err) { recError = err; }
+  }
+  if(!rec) throw new Error('this browser could not start a video recorder' + (recError && recError.message ? ' (' + recError.message + ')' : '') + '. Try Export Offline (smooth), which renders the clip frame by frame instead.');
   liveExportRec=rec;
   const chunks = [];
   rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
   const done = new Promise(res => { rec.onstop = res; });
   rec.start(250);
-  log('Exporting ' + c.name + ' in real time… keep this tab in front. If you switch tabs, this live export will pause and resume when you return. To switch tabs freely, use Export Offline (smooth) instead. Format: ' + (mime || 'browser default'));
+  log('Exporting ' + c.name + ' in real time… keep this tab in front. If you switch tabs, this live export will pause and resume when you return. To switch tabs freely, use Export Offline (smooth) instead. Format: ' + (usedMime || 'browser default'));
   // Draw loop — one draw per NEW video frame only, not per screen refresh.
   // Old code drew on requestAnimationFrame while the recorder sampled at 30fps separately,
   // so when drawing fell behind, the recorder repeated the last canvas frame — the sticking look.
@@ -1396,8 +1530,8 @@ async function exportClipMedia(c){
   if(exportStop){ log('Export cancelled; no download was created.'); return false; }
   const totalBytes=chunks.reduce((s,ch)=>s+(ch.size||0),0);
   if(!totalBytes){ log('Export produced no frames — the file would be empty, so no download was created. Keep this tab in front during export and try again. If it still fails, tell me what browser you are using.'); $('progress').value=0; return false; }
-  const blob = new Blob(chunks, {type: mime || 'video/webm'});
-  const ext = (mime && mime.indexOf('mp4') >= 0) ? 'mp4' : 'webm';
+  const blob = new Blob(chunks, {type: usedMime || 'video/webm'});
+  const ext = (usedMime && usedMime.indexOf('mp4') >= 0) ? 'mp4' : 'webm';
   const saved = await saveExportFile(blob, (c.name.replace(/[^\w\- ]+/g,'').trim() || 'Clip') + '.' + ext);
   log('Export done: ' + saved.filename + (saved.folder ? ' saved into the connected folder "' + saved.folder + '".' : ' — if it did not download automatically, click the link above.'));
   return true;
@@ -1538,7 +1672,7 @@ if($('autoSaveClips'))$('autoSaveClips').addEventListener('change',()=>{
   if($('autoSaveClips').checked)setTimeout(autoSaveReadyClips,0);
 });
 const activeExportIds=new Set();
-const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','cloudDest','cloudDestUse','cloudOpen','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
+const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','cloudDest','cloudDestUse','cloudOpen','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
 function setExportControlsLocked(locked){
   exportControlIds.forEach(id=>{const el=$(id);if(el)el.disabled=locked;});
   cropBox.style.pointerEvents=locked?'none':'auto';
@@ -1623,7 +1757,7 @@ function applyProjectData(d,opts={}){
         reviewed:!!c.reviewed,exportStatus:c.exportStatus||'not-exported',batchSelected:!!c.batchSelected,
         favorite:!!c.favorite,thumbnail:c.thumbnail||'',
         approvalState:['suggested','needs-review','approved','rejected'].includes(c.approvalState)?c.approvalState:'needs-review',approvedAt:c.approvedAt||null,rejectedAt:c.rejectedAt||null,creationMethod:c.creationMethod||'manual',exportOutdated:!!c.exportOutdated,
-        sourceIdentity:c.sourceIdentity||d.sourceIdentity||'',trackingStatus:trackingValidated&&c.trackingStatus==='ready'?'ready':c.trackingStatus==='in-progress'?'needs-review':(['queued','waiting-target','ready','needs-review','failed'].includes(c.trackingStatus)?c.trackingStatus:((track.length)?'needs-review':'waiting-target')),trackingProgress:Number(c.trackingProgress)||0,trackingValidated,trackingError:String(c.trackingError||''),trackingTargetId:String(c.trackingTargetId||''),trackingRevision:Number(c.trackingRevision)||0,smoothness:Number.isFinite(c.smoothness)?c.smoothness:null,reviewPlaybackComplete:!!c.reviewPlaybackComplete,reviewPlaybackProgress:Number(c.reviewPlaybackProgress)||0
+        sourceIdentity:c.sourceIdentity||d.sourceIdentity||'',trackingStatus:trackingValidated&&c.trackingStatus==='ready'?'ready':c.trackingStatus==='in-progress'?'needs-review':(['queued','waiting-target','ready','needs-review','failed','no-person'].includes(c.trackingStatus)?c.trackingStatus:((track.length)?'needs-review':'waiting-target')),trackingProgress:Number(c.trackingProgress)||0,trackingValidated,trackingError:String(c.trackingError||''),trackingTargetId:String(c.trackingTargetId||''),trackingRevision:Number(c.trackingRevision)||0,smoothness:Number.isFinite(c.smoothness)?c.smoothness:null,reviewPlaybackComplete:!!c.reviewPlaybackComplete,reviewPlaybackProgress:Number(c.reviewPlaybackProgress)||0
       };});
       projectDirty=false;
       if(d.settings&&typeof d.settings==='object'){
@@ -1671,7 +1805,7 @@ $('projInput').addEventListener('change', async e => {
 // Only project data is stored on this device (clips, tracking and settings).
 // The video file itself is never stored, so you reopen the same video to continue.
 const DRAFT_KEY='mercycut-web-draft-v1';
-const DRAFT_SETTING_IDS=['preset','outW','outH','exportSize','trackingSmoothness','movementTrackStep','movementTrackSize','movementSmoothness','movementCount','movementClipLength','movementSample','movementSkipMinutes','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs'];
+const DRAFT_SETTING_IDS=['preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','movementTrackStep','movementTrackSize','movementSmoothness','movementCount','movementClipLength','movementSample','movementSkipMinutes','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs'];
 let draftTimer=null;
 function draftSnapshot(){
   const settings={};
@@ -1749,6 +1883,7 @@ async function waitForClipTracking(c){
   let stalledMs=0;
   while(trackingPipelineRunning && !trackingStopRequested){
     if(c.trackingValidated && (c.trackingStatus==='ready'||c.trackingStatus==='needs-review')) return true;
+    if(c.trackingStatus==='no-person') return true;
     if(c.trackingStatus==='failed') return false;
     if(activeExportIds.size){ await trackingSleep(500); continue; }
     if(!trackingQueueRunning && c.trackingStatus!=='queued' && c.trackingStatus!=='in-progress') return false;
@@ -1904,9 +2039,9 @@ function updateMovementEstimate(){
   const sampleCount=Math.max(1, Math.ceil(usable/sampleInterval));
   const movementEst=sampleCount*0.5;
   const topN=Math.max(1, Math.min(20, parseInt($('movementCount') ? $('movementCount').value : 5)||5));
-  const trackStep=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
+  const trackStep=trackingStepSeconds()||(1/30);
   const trackSize=parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512)||512;
-  const trackingSamplesPerClip=Math.ceil(clipLengthEst/trackStep);
+  const trackingSamplesPerClip=Math.max(2, Math.ceil(clipLengthEst/trackStep));
   const trackingEst=topN*trackingSamplesPerClip*perDetectSeconds(trackSize);
   const exportEst=topN*clipLengthEst;
   const total=movementEst+trackingEst+exportEst;
@@ -2036,7 +2171,7 @@ async function findBestMovementClips(){
     const trackStart=Date.now();
     const trackTimer=setInterval(()=>{
       const elapsed=(Date.now()-trackStart)/1000;
-      const trackStepNow=parseFloat($('movementTrackStep') ? $('movementTrackStep').value : 1)||1;
+      const trackStepNow=trackingStepSeconds()||(1/30);
       const trackSizeNow=parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512)||512;
       const estTracking=added*Math.ceil(clipLengthSel/trackStepNow)*perDetectSeconds(trackSizeNow);
       $('movementStatus').textContent='Tracking '+added+' clip(s): timer elapsed '+fmtDuration(elapsed)+', estimated tracking time about '+fmtDuration(estTracking)+' (based on your settings — your computer speed will change it). When tracking is ready, tick the clips you want and press Save Picked Clips.';
