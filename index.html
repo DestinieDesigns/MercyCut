@@ -80,7 +80,10 @@
   #addClip,#saveChanges{background:#ffc107;color:#2a0a68;font-weight:800;border-color:#ffd54f}
   #saveChanges[hidden],#cancelChanges[hidden],#addClip[hidden]{display:none}
   #clipName{max-width:220px}.savedClipLabel{font-weight:700;color:#e1c16e}
+  #cloudDest{flex:1;min-width:240px;max-width:430px}
   .statusLine{font-size:12px;color:#ded5eb;min-height:20px}
+  .jumpChip{font-size:12px;padding:2px 8px}
+  .mutedSmall{font-size:12px;color:#ded5eb}
   .approvalBadge{display:inline-block;border:1px solid #746482;border-radius:10px;padding:1px 6px;margin:2px 3px 2px 0;font-weight:700}.approvalBadge.approved{color:#8ce99e;border-color:#4e8a61}.approvalBadge.rejected{color:#ff8787;border-color:#9d4e4e}.clipActions .danger{border-color:#a84f4f;color:#ffb4b4}
   dialog{background:#282830;color:#eee;border:1px solid #777;border-radius:10px;padding:20px;max-width:430px}
   dialog::backdrop{background:#0009}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:16px}
@@ -259,9 +262,10 @@
         </div>
         <div class="row"><label for="trackingSmoothness">Crop smoothness <input id="trackingSmoothness" type="range" min="0" max="100" value="55"></label><span id="trackingSmoothnessValue">55%</span></div>
         <p>Tracking follows the detected person whose centre is nearest to the last position, within 60% of the video width, with at least 50% confidence. This is a best-effort position match; crowded or crossing people can still confuse it. If no match is close enough, it holds the last position and marks the sample lost. Manual keyframes can correct any sample.</p>
-        <p>Privacy and downloads: your video stays in this tab. First use downloads MediaPipe's vision runtime from jsDelivr and the EfficientDet-Lite2 person model from Google; only video frames being analyzed are used locally. The page has no analytics or upload feature. MediaPipe and the EfficientDet-Lite0 model are Apache-2.0.</p>
+        <p>Privacy and downloads: your video stays in this tab. First use downloads MediaPipe's vision runtime from jsDelivr and the EfficientDet-Lite2 person model from Google; only video frames being analyzed are used locally. The page has no analytics or upload feature: a cloud link you paste is only opened in a new tab, and the clip is saved on your device for you to drop in. MediaPipe and the EfficientDet-Lite0 model are Apache-2.0.</p>
         <progress id="trackProgress" value="0" max="100"></progress>
         <div id="trackStatus" aria-live="polite">Tracking has not run for this clip.</div>
+        <div id="lostJump" class="row" style="display:none"></div>
         <div id="keyList"></div>
       </div>
       <div class="card">
@@ -274,6 +278,9 @@
         <progress id="progress" value="0" max="100"></progress>
         <div class="row"><label><input type="checkbox" id="autoSaveClips"> Auto-save each clip as soon as its tracking finishes</label><button id="autoSaveFolder">Choose folder…</button></div>
         <div id="autoSaveWhere" class="statusLine">Auto-save is off. Press “Choose folder…” to write finished clips straight into a folder on this device (Chrome or Edge); otherwise they auto-download to Downloads.</div>
+        <div class="row"><label>Cloud folder link <input type="url" id="cloudDest" placeholder="Paste a Google Drive, Dropbox or OneDrive folder link" autocomplete="off" spellcheck="false"></label><button id="cloudDestUse">Use this link</button><button id="cloudOpen" disabled>Open destination</button></div>
+        <div class="row"><label><input type="checkbox" id="cloudSend" disabled> Open the cloud link after each clip is saved</label></div>
+        <div id="cloudWhere" class="statusLine">Optional: paste a shared Google Drive, Dropbox, OneDrive or WeTransfer link. Finished clips are saved on this device as usual, and MercyCut opens that link in a new tab so you can drop each file straight in. A web page cannot sign in to Drive by itself, so MercyCut never uploads your video — the last drop is yours.</div>
         <div id="exportInfo">Exported files download to your Downloads folder. The browser chooses MP4 or WebM when supported; audio capture depends on the browser. Live export runs in real time, and this tab must stay in front — if you switch tabs, live export now pauses and resumes when you return. For switching tabs freely, use Export Offline (smooth), which is safe to switch tabs.</div>
         <div id="downloadArea"></div>
       </div>
@@ -291,6 +298,7 @@ const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), cropBox = $('cropBox'), outCanvas = $('outCanvas'), octx = outCanvas.getContext('2d');
 let clips = [], sel = -1, manualCenter = null, sourceName = '', sourceIdentity='';
 let trackStop = false, exportStop = false; let sourceFile=null;
+let durationRepairTried = false, durationRepairPending = false;
 let cocoModel = null, cocoLoadPromise = null, candidates = [], selectedPerson = null, detectedAt = null;
 let selectedAnchor = null, selectedPersonNumber = null, detectionTimer = null, detectRequest = 0;
 let trackBusy = false;
@@ -336,7 +344,7 @@ function updateRangeUI(){
   $('endReadout').textContent='END '+(endSet?fmtFull(editRange.end):'—');
   $('lengthReadout').textContent='SELECTED LENGTH '+(valid?fmtFull(editRange.end-editRange.start):'—');
   $('currentTimeReadout').textContent='PLAYHEAD '+fmtFull(video.currentTime||0);
-  $('rangeInstruction').textContent=!startSet?'Move the playhead to the beginning, then set START.':!endSet?'Move to the ending, then set END.':valid?'Your clip is selected. Review it, adjust the markers, then add it to your clips.':'Move the markers to select a valid clip range.';
+  $('rangeInstruction').textContent=!startSet?'Move the playhead to the beginning, then set START.':!endSet?'Move to the ending, then set END.':valid?(sel>=0?'Editing a saved clip. Adjust the markers, then press Save Changes to keep them, or New Clip to start another.':'Your clip is selected. Review it, adjust the markers, then add it to your clips.'):'Move the markers to select a valid clip range.';
   $('setStart').disabled=!duration;$('setEnd').disabled=!duration;
   $('playClip').disabled=!valid;$('addClip').hidden=sel>=0||!valid;
   const dirty=rangeIsDirty();$('saveChanges').hidden=sel<0||!dirty;$('cancelChanges').hidden=sel<0||!dirty;
@@ -501,7 +509,7 @@ stage.addEventListener('click', e => {
 $('fileInput').addEventListener('change', async e => {
   const f = e.target.files[0]; if(!f) return;
   if(!await resolveUnsavedEdits()){e.target.value='';return;}
-  detectRequest++; clearTimeout(detectionTimer);
+  detectRequest++; clearTimeout(detectionTimer); durationRepairTried=false;
   // A selection belongs to its original source frame; retaining it for a new file is unsafe.
   candidates=[]; selectedPerson=null; selectedAnchor=null; selectedPersonNumber=null; detectedAt=null; manualCenter=null; cropWasDragged=false;
   $('selInfo').textContent='No person selected. Click a numbered box or Person button under the video.';
@@ -513,17 +521,30 @@ $('fileInput').addEventListener('change', async e => {
   if(video.src) URL.revokeObjectURL(video.src);
   video.src = URL.createObjectURL(f);
   video.load();
-  log('Loaded: ' + f.name + ' (' + Math.round(f.size/1048576) + ' MB)');
+  log('Loaded: ' + f.name + ' (' + formatBytes(f.size) + ')');
 });
 video.addEventListener('loadedmetadata', () => {
-  const identityParts=sourceIdentity.split('|');sourceIdentity=identityParts.slice(0,3).join('|')+'|'+(Number(video.duration)||0).toFixed(3)+'|'+video.videoWidth+'x'+video.videoHeight;
-  $('info').textContent = sourceName + '  •  ' + video.videoWidth + '×' + video.videoHeight + '  •  ' + (video.duration? video.duration.toFixed(1)+'s' : '');
-  $('timeLabel').textContent=fmt(video.currentTime)+' / '+fmt(video.duration||0);
+  // Some files (screen recordings and MediaRecorder WebM) report duration Infinity instead of a number.
+  // Seeking far past the end makes the browser work out the real duration; retry once, then say so plainly.
+  if(!Number.isFinite(video.duration)&&!durationRepairTried){durationRepairTried=true;durationRepairPending=true;try{video.currentTime=1e101;}catch(e){}}
+  const identityParts=sourceIdentity.split('|');sourceIdentity=identityParts.slice(0,3).join('|')+'|'+(videoDuration()||0).toFixed(3)+'|'+video.videoWidth+'x'+video.videoHeight;
+  $('info').textContent = sourceName + '  •  ' + video.videoWidth + '×' + video.videoHeight + '  •  ' + (videoDuration()? videoDuration().toFixed(1)+'s' : 'duration unknown — this file has no length in its header (common for screen recordings); the timeline still works, so set START and END by eye');
+  $('timeLabel').textContent=fmt(video.currentTime)+' / '+fmt(videoDuration());
   if(sel<0){editRange={start:null,end:null};savedRange=null;}
   updateRangeUI();
   drawPreview();
 });
 video.addEventListener('loadeddata', () => requestPeopleDetection(0));
+video.addEventListener('durationchange', () => {
+  if(!Number.isFinite(video.duration)||video.duration<=0)return;
+  const justRepaired=durationRepairPending;
+  if(justRepaired){durationRepairPending=false;try{video.currentTime=0;}catch(e){}}
+  else if(video.currentTime>video.duration||video.currentTime>1e6)video.currentTime=0;
+  $('info').textContent = sourceName + '  •  ' + video.videoWidth + '×' + video.videoHeight + '  •  ' + videoDuration().toFixed(1)+'s';
+  $('timeLabel').textContent = fmt(video.currentTime)+' / '+fmt(videoDuration());
+  updateRangeUI();
+  if(justRepaired)requestPeopleDetection(0);
+});
 video.addEventListener('timeupdate', () => {
   $('timeLabel').textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration||0);
   $('currentTimeReadout').textContent='PLAYHEAD '+fmtFull(video.currentTime||0);
@@ -601,6 +622,36 @@ for(const id of ['clipSearch','clipSort','clipFilter','approvalFilter','exportFi
 
 // --- Clips ---
 function newClipId(){return (globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():'clip-'+Date.now()+'-'+Math.random().toString(16).slice(2);}
+function formatBytes(n){
+  n=Number(n)||0;
+  if(n>=1073741824)return (n/1073741824).toFixed(1)+' GB';
+  if(n>=1048576)return (n/1048576).toFixed(1)+' MB';
+  if(n>=1024)return Math.round(n/1024)+' KB';
+  return n+' B';
+}
+function videoDuration(){const d=video.duration;return Number.isFinite(d)&&d>0?d:0;}
+function lostSampleTimes(c){return ((c&&c.track)||[]).filter(p=>p.lost).map(p=>Math.round(p.t*1000)/1000);}
+function renderLostJumps(c){
+  const box=$('lostJump');if(!box)return;
+  box.innerHTML='';
+  const times=lostSampleTimes(c);
+  if(!times.length){box.style.display='none';return;}
+  box.style.display='flex';
+  const label=document.createElement('span');label.className='mutedSmall';
+  label.textContent='Fix lost samples — jump to:';
+  box.appendChild(label);
+  times.forEach(t=>{
+    const b=document.createElement('button');b.type='button';b.className='jumpChip';b.textContent='↦ '+fmtFull(t);
+    b.title='Move the playhead to '+fmtFull(t)+' so you can click the person there and add a keyframe';
+    b.addEventListener('click',async()=>{
+      if(!video.videoWidth)return;
+      await seekTo(t);
+      updateRangeUI();drawPreview();
+      log('Jumped to the lost sample at '+fmtFull(t)+'. Click the person in the video, then Add Keyframe here.');
+    });
+    box.appendChild(b);
+  });
+}
 function clipTrackingLabel(c){
   let status=c.trackingStatus||((c.track||[]).length?'needs-review':'not-tracked');if(status==='ready'&&!c.trackingValidated)status='needs-review';
   const names={'queued':'Tracking Queued','waiting-target':'Needs Tracking Review · Select a person','in-progress':'Tracking in Progress','ready':'Tracking Ready','needs-review':'Needs Tracking Review','failed':'Tracking Failed','not-tracked':'Not tracked'};
@@ -746,6 +797,9 @@ function loadClipToUI(c,seek=true){
   $('clipName').value=c.name;
   $('outW').value = c.outW; $('outH').value = c.outH;
   manualCenter=null;cropWasDragged=false;
+  $('trackProgress').value=Number(c.trackingProgress)||0;
+  $('trackStatus').textContent=clipTrackingLabel(c);
+  renderLostJumps(c);
   updateRangeUI();
   if(c.sourceName&&sourceName&&c.sourceName!==sourceName){log('This clip belongs to "'+c.sourceName+'". Load that source video to preview it.');return;}
   if(seek)seekTo(c.start);
@@ -1048,7 +1102,7 @@ async function runAutomaticTracking(c){
     if(uncertain)c.trackingError=uncertain+' low-confidence or ambiguous sample(s) held at the last reliable position (a person WAS detected, just with low confidence).';
   }
   if(lost<=0) c.reviewed=true;c.exportStatus='not-exported';c.exportError='';projectDirty=true;renderClips();
-  if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);drawPreview();}
+  if(sel===clips.indexOf(c)){$('trackProgress').value=100;$('trackStatus').textContent=clipTrackingLabel(c);renderLostJumps(c);drawPreview();}
   log('Automatic tracking '+(uncertain?'needs review':'ready')+' for '+c.name+': '+points.length+' timestamped samples across '+(c.end-c.start).toFixed(1)+' seconds.');
 }
 async function processTrackingQueue(){
@@ -1356,13 +1410,86 @@ async function saveExportFile(blob,filename){
       if(autoSaveDir.queryPermission){let p=await autoSaveDir.queryPermission({mode:'readwrite'});if(p!=='granted'&&autoSaveDir.requestPermission)p=await autoSaveDir.requestPermission({mode:'readwrite'});if(p!=='granted')throw new Error('the folder permission was not granted');}
       const handle=await autoSaveDir.getFileHandle(filename,{create:true}),writable=await handle.createWritable();
       await writable.write(blob);await writable.close();
+      cloudUploadLink(filename);maybeOpenCloudDestination(filename);
       return {filename,folder:autoSaveDir.name};
     }catch(err){log('Could not write '+filename+' to the connected folder ('+(err.message||err)+'); downloading it instead.');}
   }
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=filename;a.textContent='⬇ Download '+filename+' ('+Math.round(blob.size/1048576*10)/10+' MB)';a.style.display='block';a.style.margin='8px 0';
+  a.href=url;a.download=filename;a.textContent='⬇ Download '+filename+' ('+formatBytes(blob.size)+')';a.style.display='block';a.style.margin='8px 0';
   $('downloadArea').appendChild(a);a.click();
+  cloudUploadLink(filename);maybeOpenCloudDestination(filename);
   return {filename,folder:null};
+}
+// --- Cloud destination: a pasted Google Drive / Dropbox / OneDrive link ---
+// A web page cannot sign in to Drive, so MercyCut never uploads: it saves the clip,
+// then opens your link in a new tab so you can drop the file in yourself.
+let cloudDest=null, cloudLastOpen=0;
+const cloudProviders=[
+  [/drive\.google\.com|docs\.google\.com/i,'Google Drive'],
+  [/dropbox\.com/i,'Dropbox'],
+  [/onedrive\.live\.com|1drv\.ms/i,'OneDrive'],
+  [/sharepoint\.com/i,'SharePoint'],
+  [/icloud\.com/i,'iCloud Drive'],
+  [/mega\.nz/i,'MEGA'],
+  [/box\.com/i,'Box'],
+  [/wetransfer\.com/i,'WeTransfer'],
+  [/pcloud\.com/i,'pCloud'],
+  [/drive\.amazon\.com/i,'Amazon Drive']
+];
+function readCloudDestination(raw){
+  let text=(raw||'').trim();
+  if(!text) return {error:'empty'};
+  if(!/^https?:\/\//i.test(text)) text='https://'+text.replace(/^\/+/,'');
+  let url; try{ url=new URL(text); }catch(err){ return {error:'invalid'}; }
+  if(!/^https?:$/.test(url.protocol)||url.hostname.indexOf('.')<0) return {error:'invalid'};
+  const host=url.hostname.replace(/^www\./,'');
+  let label=host;
+  for(const [re,name] of cloudProviders){ if(re.test(host)){ label=name; break; } }
+  return {url:url.href,host,label};
+}
+function setCloudDestination(raw){
+  const info=readCloudDestination(raw), input=$('cloudDest'), send=$('cloudSend'), open=$('cloudOpen');
+  if(!info||info.error){
+    cloudDest=null;
+    if(send){ send.checked=false; send.disabled=true; }
+    if(open) open.disabled=true;
+    if(input&&info&&info.error==='invalid') input.value='';
+    $('cloudWhere').textContent = info&&info.error==='invalid'
+      ? 'That does not look like a web link. Paste a full shared link, for example https://drive.google.com/drive/folders/…'
+      : 'Optional: paste a shared Google Drive, Dropbox, OneDrive or WeTransfer link. Finished clips are saved on this device as usual, and MercyCut opens that link in a new tab so you can drop each file straight in.';
+    if(info&&info.error==='invalid') log('That cloud link was not used: it is not an http(s) web address.');
+    return false;
+  }
+  cloudDest=info;
+  if(input) input.value=info.url;
+  if(send) send.disabled=false;
+  if(open) open.disabled=false;
+  $('cloudWhere').textContent='Cloud destination set: '+info.label+' ('+info.host+'). Clips are still saved on this device, then MercyCut opens that link so you can drop the file in. Nothing is uploaded by MercyCut itself.';
+  log('Cloud destination set: '+info.label+' — '+info.url);
+  return true;
+}
+function openCloudDestination(){
+  if(!cloudDest){ log('Paste a cloud link first, then press Open destination.'); return null; }
+  const w=window.open(cloudDest.url,'_blank');
+  if(w) w.opener=null;
+  else log('Your browser blocked the new tab. Open it yourself: '+cloudDest.url);
+  return w;
+}
+function cloudUploadLink(filename){
+  const area=$('downloadArea');
+  if(!cloudDest||!area||!filename) return;
+  const a=document.createElement('a');
+  a.href=cloudDest.url; a.target='_blank'; a.rel='noopener noreferrer';
+  a.textContent='⬆ Upload '+filename+' to '+cloudDest.label;
+  a.style.display='block'; a.style.margin='6px 0';
+  area.appendChild(a);
+}
+function maybeOpenCloudDestination(filename){
+  if(!cloudDest||!$('cloudSend')||!$('cloudSend').checked) return;
+  const now=Date.now();
+  if(now-cloudLastOpen<8000) return;
+  cloudLastOpen=now;
+  if(openCloudDestination()) log('Opened '+cloudDest.label+' in a new tab — drag '+filename+' from your Downloads folder into that window to finish the upload.');
 }
 async function chooseAutoSaveFolder(){
   if(!window.showDirectoryPicker){log('This browser cannot write to a folder directly (Chrome or Edge can). Finished clips will auto-download to your Downloads folder instead.');$('autoSaveWhere').textContent='This browser cannot write to a folder; finished clips auto-download to Downloads.';return;}
@@ -1401,12 +1528,17 @@ function autoSaveReadyClips(){
   })();
 }
 if($('autoSaveFolder'))$('autoSaveFolder').addEventListener('click',chooseAutoSaveFolder);
+if($('cloudDestUse'))$('cloudDestUse').addEventListener('click',()=>setCloudDestination($('cloudDest').value));
+if($('cloudDest'))$('cloudDest').addEventListener('change',()=>{ if($('cloudDest').value.trim()) setCloudDestination($('cloudDest').value); });
+if($('cloudDest'))$('cloudDest').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); setCloudDestination($('cloudDest').value); } });
+if($('cloudOpen'))$('cloudOpen').addEventListener('click',()=>{ if(!cloudDest&&!setCloudDestination($('cloudDest').value)) return; openCloudDestination(); });
+if($('cloudSend'))$('cloudSend').addEventListener('change',()=>{ log($('cloudSend').checked&&cloudDest?'MercyCut will open '+cloudDest.label+' after each clip is saved.':'MercyCut will not open the cloud link automatically.'); });
 if($('autoSaveClips'))$('autoSaveClips').addEventListener('change',()=>{
   log($('autoSaveClips').checked?'Auto-save is ON: each clip is saved as soon as its tracking finishes, into the connected folder or Downloads.':'Auto-save is OFF.');
   if($('autoSaveClips').checked)setTimeout(autoSaveReadyClips,0);
 });
 const activeExportIds=new Set();
-const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
+const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','cloudDest','cloudDestUse','cloudOpen','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
 function setExportControlsLocked(locked){
   exportControlIds.forEach(id=>{const el=$(id);if(el)el.disabled=locked;});
   cropBox.style.pointerEvents=locked?'none':'auto';
