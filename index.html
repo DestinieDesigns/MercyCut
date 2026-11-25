@@ -272,6 +272,8 @@
           <button id="cancelExp">Cancel Export</button>
         </div>
         <progress id="progress" value="0" max="100"></progress>
+        <div class="row"><label><input type="checkbox" id="autoSaveClips"> Auto-save each clip as soon as its tracking finishes</label><button id="autoSaveFolder">Choose folder…</button></div>
+        <div id="autoSaveWhere" class="statusLine">Auto-save is off. Press “Choose folder…” to write finished clips straight into a folder on this device (Chrome or Edge); otherwise they auto-download to Downloads.</div>
         <div id="exportInfo">Exported files download to your Downloads folder. The browser chooses MP4 or WebM when supported; audio capture depends on the browser. Live export runs in real time, and this tab must stay in front — if you switch tabs, live export now pauses and resumes when you return. For switching tabs freely, use Export Offline (smooth), which is safe to switch tabs.</div>
         <div id="downloadArea"></div>
       </div>
@@ -874,9 +876,14 @@ async function loadCoco(){
       return (res&&res.detections?res.detections:[]).map(d=>({class:'person',score:d.categories[0].score,bbox:[d.boundingBox.originX,d.boundingBox.originY,d.boundingBox.width,d.boundingBox.height]}));
     }};
     return cocoModel;
-  })().catch(err=>{cocoLoadPromise=null;throw err;});
+  })().catch(err=>{cocoLoadPromise=null;throw detectorLoadError(err);});
   return cocoLoadPromise;
 }
+// A detector that cannot load must never be reported as "no person in this frame":
+// that would quietly send every clip to Needs Tracking Review. Every caller shows
+// this message instead, and clips are marked Tracking Failed, not review.
+const DETECTOR_FAIL_MESSAGE='The person detector could not load, so nothing was tracked and no clip was marked as having "no person". First use needs MediaPipe from cdn.jsdelivr.net and the EfficientDet-Lite2 model from storage.googleapis.com — check the internet connection, or a network/firewall/VPN that blocks those sites, then press the button again. Manual clips and keyframes still work without the detector.';
+function detectorLoadError(err){const e=new Error(DETECTOR_FAIL_MESSAGE+' (Browser said: '+((err&&err.message)||err)+')');e.detectorLoad=true;return e;}
 function queueClipTracking(c){
   if(!c)return;
   markClipEdited(c);c.trackingValidated=false;projectDirty=true;
@@ -1047,8 +1054,9 @@ async function runAutomaticTracking(c){
 async function processTrackingQueue(){
   if(trackingQueueRunning||!selectedAnchor||!trackingTargetId||!video.videoWidth||activeExportIds.size)return;
   trackingQueueRunning=true;
-  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);}renderClips();}finally{trackBusy=false;trackStop=false;}}
+  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);if(err.detectorLoad){const rest=trackingQueue.splice(0);rest.forEach(qid=>{const q=clips.find(x=>x.id===qid);if(q&&q.trackingStatus==='queued'){q.trackingStatus='failed';q.trackingValidated=false;q.trackingError=err.message;}});log('Stopped the tracking queue: the person detector could not load, so no clip was marked as having "no person".');}}renderClips();}finally{trackBusy=false;trackStop=false;}}
   }finally{trackingQueueRunning=false;retiredTrackingUrls.forEach(url=>URL.revokeObjectURL(url));retiredTrackingUrls=[];}
+  setTimeout(autoSaveReadyClips,0);
 }
 async function detectPeopleAtCurrentFrame(requestId){
   if(!video.videoWidth)return;
@@ -1085,7 +1093,7 @@ async function detectPeopleAtCurrentFrame(requestId){
     renderCandidates(); drawPreview();
   }catch(err){
     if(requestId!==detectRequest)return;
-    $('detectionInfo').textContent='People could not be found. Check your internet connection for the first model download, or use manual keyframes.';
+    $('detectionInfo').textContent=err.detectorLoad?err.message:'People could not be found. Check your internet connection for the first model download, or use manual keyframes.';
     log('People detection failed: '+err.message); renderCandidates();
   }
 }
@@ -1226,12 +1234,10 @@ async function exportClipOffline(c){
     const data=await ffmpeg.readFile('output.mp4');
     if(!data || !data.byteLength) throw new Error('Offline export produced an empty output file.');
     const blob=new Blob([data.buffer.slice(data.byteOffset, data.byteOffset+data.byteLength)], {type:'video/mp4'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'-offline.mp4'; a.textContent='⬇ Download '+a.download+' ('+Math.round(blob.size/1048576*10)/10+' MB)'; a.style.display='block'; a.style.margin='8px 0';
-    $('downloadArea').appendChild(a); a.click();
+    const saved=await saveExportFile(blob,(c.name.replace(/[^\w\- ]+/g,'').trim()||'Clip')+'-offline.mp4');
     c.exportStatus='exported'; $('progress').value=100;
     releaseWakeLock();
-    log('Offline export done: '+a.download+' — a proper 30fps file, not a live recording. If it did not download automatically, click the link above.');
+    log('Offline export done: '+saved.filename+(saved.folder?' saved into the connected folder "'+saved.folder+'".':' — a proper 30fps file, not a live recording. If it did not download automatically, click the link above.'));
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
     try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
   }catch(err){
@@ -1338,14 +1344,67 @@ async function exportClipMedia(c){
   if(!totalBytes){ log('Export produced no frames — the file would be empty, so no download was created. Keep this tab in front during export and try again. If it still fails, tell me what browser you are using.'); $('progress').value=0; return false; }
   const blob = new Blob(chunks, {type: mime || 'video/webm'});
   const ext = (mime && mime.indexOf('mp4') >= 0) ? 'mp4' : 'webm';
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = (c.name.replace(/[^\w\- ]+/g,'').trim() || 'Clip') + '.' + ext;
-  a.textContent = '⬇ Download ' + a.download + ' (' + Math.round(blob.size/1048576*10)/10 + ' MB)';
-  a.style.display = 'block'; a.style.margin = '8px 0';
-  $('downloadArea').appendChild(a); a.click();
-  log('Export done: ' + a.download + ' — if it did not download automatically, click the link above.');
+  const saved = await saveExportFile(blob, (c.name.replace(/[^\w\- ]+/g,'').trim() || 'Clip') + '.' + ext);
+  log('Export done: ' + saved.filename + (saved.folder ? ' saved into the connected folder "' + saved.folder + '".' : ' — if it did not download automatically, click the link above.'));
   return true;
 }
+// --- Auto-save finished clips: into a connected folder, or auto-download ---
+let autoSaveDir=null, autoSaveRunning=false;
+async function saveExportFile(blob,filename){
+  if(autoSaveDir){
+    try{
+      if(autoSaveDir.queryPermission){let p=await autoSaveDir.queryPermission({mode:'readwrite'});if(p!=='granted'&&autoSaveDir.requestPermission)p=await autoSaveDir.requestPermission({mode:'readwrite'});if(p!=='granted')throw new Error('the folder permission was not granted');}
+      const handle=await autoSaveDir.getFileHandle(filename,{create:true}),writable=await handle.createWritable();
+      await writable.write(blob);await writable.close();
+      return {filename,folder:autoSaveDir.name};
+    }catch(err){log('Could not write '+filename+' to the connected folder ('+(err.message||err)+'); downloading it instead.');}
+  }
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=filename;a.textContent='⬇ Download '+filename+' ('+Math.round(blob.size/1048576*10)/10+' MB)';a.style.display='block';a.style.margin='8px 0';
+  $('downloadArea').appendChild(a);a.click();
+  return {filename,folder:null};
+}
+async function chooseAutoSaveFolder(){
+  if(!window.showDirectoryPicker){log('This browser cannot write to a folder directly (Chrome or Edge can). Finished clips will auto-download to your Downloads folder instead.');$('autoSaveWhere').textContent='This browser cannot write to a folder; finished clips auto-download to Downloads.';return;}
+  try{
+    const dir=await window.showDirectoryPicker({id:'mercycut-clips',mode:'readwrite'});
+    autoSaveDir=dir;$('autoSaveWhere').textContent='Folder connected: '+dir.name+' — finished clips are saved there, with no download step.';
+    log('Auto-save folder connected: '+dir.name+'. Finished clips will be written straight into it.');
+  }catch(err){
+    if(err&&err.name==='AbortError'){log('Folder choice cancelled. Finished clips still auto-download to Downloads.');return;}
+    log('The folder could not be connected ('+(err.message||err)+'). Finished clips will auto-download instead.');
+  }
+}
+function autoSaveReadyClips(){
+  if(!$('autoSaveClips')||!$('autoSaveClips').checked||autoSaveRunning)return;
+  if(trackingPipelineRunning||movementRunning||activeExportIds.size||exportStop)return;
+  const ready=clips.filter(c=>trackingExportReady(c)&&c.exportStatus!=='exported');
+  if(!ready.length)return;
+  autoSaveRunning=true;
+  (async()=>{
+    let saved=0;
+    try{
+      for(const c of ready){
+        if(exportStop)break;
+        if(!trackingExportReady(c))continue;
+        $('exportInfo').textContent='Auto-saving '+c.name+' … '+(saved+1)+' of '+ready.length+'. Keep this tab in front.';
+        if(sourceFile&&!activeExportIds.size){
+          await exportClipOffline(c);
+          if(c.exportStatus!=='exported'&&!activeExportIds.size)await exportClip(c,true);
+        }else await exportClip(c,true);
+        if(c.exportStatus==='exported')saved++;
+        await new Promise(r=>setTimeout(r,300));
+      }
+      $('exportInfo').textContent='Auto-save finished: '+saved+' of '+ready.length+' clip(s) saved'+(autoSaveDir?' into the folder "'+autoSaveDir.name+'"':' to Downloads')+'.';
+    }catch(err){log('Auto-save stopped: '+(err.message||err));}
+    finally{autoSaveRunning=false;}
+  })();
+}
+if($('autoSaveFolder'))$('autoSaveFolder').addEventListener('click',chooseAutoSaveFolder);
+if($('autoSaveClips'))$('autoSaveClips').addEventListener('change',()=>{
+  log($('autoSaveClips').checked?'Auto-save is ON: each clip is saved as soon as its tracking finishes, into the connected folder or Downloads.':'Auto-save is OFF.');
+  if($('autoSaveClips').checked)setTimeout(autoSaveReadyClips,0);
+});
 const activeExportIds=new Set();
 const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
 function setExportControlsLocked(locked){
@@ -1550,7 +1609,7 @@ async function ensureTrackingPerson(clip){
       selectCandidate(best);
       log('Picked Person '+(best+1)+' (largest, most central) as the tracking target.');
       return true;
-    }catch(err){ log('Person check failed at '+fmtFull(t)+': '+err.message); }
+    }catch(err){ if(err.detectorLoad) throw err; log('Person check failed at '+fmtFull(t)+': '+err.message); }
   }
   return false;
 }
@@ -1578,7 +1637,7 @@ async function runTrackingPipeline(list){
   if(!video.videoWidth){ log('Load a video first, then find movement clips.'); return; }
   if(!list.length){ log('No clips to track.'); return; }
   if(activeExportIds.size){ log('An export is running. Wait for it to finish first.'); return; }
-  trackingPipelineRunning=true; trackingStopRequested=false;
+  trackingPipelineRunning=true; trackingStopRequested=false; let detectorFailed=false;
   let doneCount=0, failedCount=0;
   try{
     for(let n=0;n<list.length;n++){
@@ -1587,7 +1646,16 @@ async function runTrackingPipeline(list){
       if(!clips.includes(c)) continue;
       loadClipToUI(c);
       let trackingOk=false, trackingSkipped=false;
-      const personOk=await ensureTrackingPerson(c);
+      let personOk=false;
+      try{ personOk=await ensureTrackingPerson(c); }
+      catch(err){
+        if(!err.detectorLoad){
+          failedCount++; c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message||String(err);renderClips();continue;
+        }
+        c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;
+        list.slice(n+1).forEach(x=>{x.trackingStatus='failed';x.trackingValidated=false;x.trackingError=err.message;});
+        detectorFailed=true; log('Tracking stopped: '+err.message); renderClips(); break;
+      }
       if(trackingStopRequested) break;
       if(!personOk){
         trackingSkipped=true;
@@ -1613,7 +1681,9 @@ async function runTrackingPipeline(list){
   } finally {
     trackingPipelineRunning=false;
   }
-  if(trackingStopRequested){
+  if(detectorFailed){
+    log('Tracking stopped because the person detector could not load. Clips were marked Tracking Failed — none were marked as having "no person", so nothing went to Needs Tracking Review by mistake.');
+  } else if(trackingStopRequested){
     log('Tracking stopped after '+doneCount+' clip(s). Clips already finished stay finished.');
   } else {
     log('Tracking finished: '+doneCount+' clip(s) done'+(failedCount?' ('+failedCount+' with tracking trouble)':'')+'.');
@@ -1842,10 +1912,11 @@ async function findBestMovementClips(){
     try{ await runTrackingPipeline(newClips); } finally { clearInterval(trackTimer); }
     $('movementStatus').textContent='Tracking done for '+added+' movement clip(s) in '+fmtDuration((Date.now()-trackStart)/1000)+'. Tick the clips you want in My Clips, then press Save Picked Clips.';
   }catch(err){
-    $('movementStatus').textContent='Find Best Movement Clips failed: '+(err && err.message ? err.message : 'unknown error');
+    $('movementStatus').textContent=err&&err.detectorLoad?err.message:'Find Best Movement Clips failed: '+(err && err.message ? err.message : 'unknown error');
   }finally{
     movementRunning=false; releaseWakeLock(); $('movementFind').disabled=false; $('movementStop').disabled=true;
   }
+  setTimeout(autoSaveReadyClips,0);
 }
 $('movementFind').addEventListener('click', findBestMovementClips);
 if($('toggleHelp')) $('toggleHelp').addEventListener('click', ()=>{ const h=$('helpText'); if(!h) return; h.hidden=!h.hidden; $('toggleHelp').textContent=h.hidden?'Show instructions':'Hide instructions'; });
