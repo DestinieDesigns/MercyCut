@@ -878,7 +878,7 @@ function ensureTrackingVideo(){
 }
 function seekTrackingVideo(v,t){return new Promise((resolve,reject)=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);v.removeEventListener('seeked',finish);resolve();};const timer=setTimeout(()=>{if(done)return;done=true;v.removeEventListener('seeked',finish);if(Math.abs(v.currentTime-t)<.08)resolve();else reject(new Error('Video seek timed out at '+fmtFull(t)+'.'));},5000);v.addEventListener('seeked',finish,{once:true});try{v.currentTime=Math.max(0,Math.min(v.duration||t,t));if(Math.abs(v.currentTime-t)<.01)finish();}catch(err){clearTimeout(timer);done=true;reject(err);}});}
 
-let lastTrackBox={w:0,h:0},lastOverlaySeek=0;
+let lastTrackBox={w:0,h:0};
 function clearTrackingOverlay(){
   clearMotionTrail();
   const el=$('trackingOverlay'); if(el) el.innerHTML='';
@@ -890,9 +890,7 @@ function renderTrackingOverlay(persons, best, point, t){
   if(!$('showTrackingOverlay') || !$('showTrackingOverlay').checked){ el.innerHTML=''; return; }
   if(!video.videoWidth || !video.videoHeight) return;
   // Seek the main video to the tracking time (throttled to >1s jumps) so the box lines up with the frame you see.
-  // Keep the shown video in step with the tracking time, but a few times a second at
-  // most: seeking the visible player for every sample makes the decoder fight itself.
-  try{ const now=Date.now(); if(now-lastOverlaySeek>750 && document.visibilityState==='visible' && Math.abs(video.currentTime-t)>1){ lastOverlaySeek=now; video.currentTime=t; } }catch(e){}
+  try{ if(Math.abs(video.currentTime-t)>1) video.currentTime=t; }catch(e){}
   const sr=stage.getBoundingClientRect(), vr=videoContentRect();
   const sx=vr.width/video.videoWidth, sy=vr.height/video.videoHeight, ox=vr.left-sr.left, oy=vr.top-sr.top;
   el.innerHTML='';
@@ -986,49 +984,29 @@ async function runAutomaticTracking(c){
   const trackStep=isMovementClip? movementStep : (movementStep<=0.1 ? movementStep : 0.5);
   const trackSize=isMovementClip? (parseInt($('movementTrackSize') ? $('movementTrackSize').value : 512) || 512) : 640;
   const model=await loadCoco(),v=await ensureTrackingVideo(),scale=Math.min(1,trackSize/v.videoWidth);
-  const frameW=Math.max(1,Math.round(v.videoWidth*scale)),frameH=Math.max(1,Math.round(v.videoHeight*scale));
-  // Two frame buffers: the model reads one frame while the video seeks to the next,
-  // so decoding and detection overlap instead of running one after the other.
-  const buffers=[0,1].map(()=>{const cv=document.createElement('canvas');cv.width=frameW;cv.height=frameH;return cv;});
-  const bufCtx=buffers.map(cv=>cv.getContext('2d'));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(v.videoWidth*scale));canvas.height=Math.max(1,Math.round(v.videoHeight*scale));
+  const ctx=canvas.getContext('2d');
   const cache=trackingCacheFor(sid,targetId);
   const times=[c.start];for(let t=Math.ceil(c.start/trackStep)*trackStep;t<c.end-.01;t+=trackStep)if(t>c.start+.01)times.push(t);if(c.end>c.start+.01)times.push(c.end);
-  // Start the first seek now; later seeks start while the previous frame is detecting.
-  const firstUncached=times.find(t=>!cache.has(t.toFixed(3)));
-  let pendingSeek=firstUncached!=null?seekTrackingVideo(v,firstUncached).catch(err=>err):null;
-  // Seek only to times we actually need: cached samples never touch the decoder.
-  const scheduleNextSeek=(from)=>{
-    for(let k=from+1;k<times.length;k++){
-      if(cache.has(times[k].toFixed(3)))continue;
-      pendingSeek=seekTrackingVideo(v,times[k]).catch(err=>err);
-      return;
-    }
-    pendingSeek=null;
-  };
-  let last=anchor,points=[],lost=0,uncertain=0,lostTimes=[],lastPaint=0;
+  let last=anchor,points=[],lost=0,uncertain=0,lostTimes=[];
   for(let n=0;n<times.length;n++){
     if(trackStop)throw new Error('Tracking was cancelled.');
     if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
     const t=times[n],key=t.toFixed(3),cached=cache.get(key);
-    if(pendingSeek){ const seekResult=await pendingSeek; pendingSeek=null; if(seekResult instanceof Error)throw seekResult; }
-    const paintOverlay=Date.now()-lastPaint>=200; if(paintOverlay)lastPaint=Date.now();
-    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};if(point.w&&point.h)lastTrackBox={w:point.w,h:point.h};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;if(paintOverlay)renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t); if(!point.lost) pushMotionTrail(t, point.cx, point.cy);scheduleNextSeek(n);}
+    if(cached){const point={...cached};points.push(point);if(!point.lost){last={cx:point.cx,cy:point.cy};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;renderTrackingOverlay([], point.lost?null:{cx:point.cx,cy:point.cy,w:lastTrackBox.w,h:lastTrackBox.h,confidence:point.confidence}, point, t); if(!point.lost) pushMotionTrail(t, point.cx, point.cy);}
     else{
-      const bi=n&1;
-      bufCtx[bi].drawImage(v,0,0,frameW,frameH);
-      const detecting=model.detect(buffers[bi]);
-      scheduleNextSeek(n);
-      const preds=await detecting;
+      await seekTrackingVideo(v,t);ctx.drawImage(v,0,0,canvas.width,canvas.height);const preds=await model.detect(canvas);
       const persons=preds.filter(p=>p.class==='person'&&p.score>.5).map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
       const ranked=persons.map(p=>({...p,distance:Math.hypot(p.cx-last.cx,p.cy-last.cy)})).sort((a,b)=>a.distance-b.distance),ambiguous=ranked.length>1&&ranked[1].distance-ranked[0].distance<v.videoWidth*.01,candidate=ranked[0]&&ranked[0].distance<v.videoWidth*.60&&!ambiguous?ranked[0]:null,best=candidate&&candidate.confidence>=.50?candidate:null;
       const point=best?{t,cx:best.cx,cy:best.cy,confidence:best.confidence,lost:false,lowConfidence:false}:{t,cx:last.cx,cy:last.cy,confidence:candidate?candidate.confidence:0,lost:true,lowConfidence:true};
       cache.set(key,point);points.push(point);if(best){last={cx:best.cx,cy:best.cy};lastTrackBox={w:best.w,h:best.h};}else {lost++;lostTimes.push(t);}if(point.lost||point.lowConfidence)uncertain++;
-      if(paintOverlay)renderTrackingOverlay(persons, best, point, t); if(best) pushMotionTrail(t, best.cx, best.cy);
+      renderTrackingOverlay(persons, best, point, t); if(best) pushMotionTrail(t, best.cx, best.cy);
     }
     c.trackingProgress=Math.round((n+1)/times.length*100);
-    if(paintOverlay && sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
-    if(n%25===0)renderClips();
-    if(n%5===4)await new Promise(resolve=>setTimeout(resolve,0));
+    if(sel===clips.indexOf(c)){$('trackProgress').value=c.trackingProgress;$('trackStatus').textContent='Tracking '+c.trackingProgress+'% · '+(n+1)+'/'+times.length+' samples · '+lost+' uncertain.';}
+    if(n%12===0)renderClips();
+    await new Promise(resolve=>setTimeout(resolve,0));
   }
   const valid=points.length>=2&&points[0].t<=c.start+.01&&points[points.length-1].t>=c.end-.01&&points.every(p=>Number.isFinite(p.cx)&&Number.isFinite(p.cy));
   if(lostTimes.length) log('Tracking lost at: '+lostTimes.slice(0,20).map(x=>fmtFull(x)).join(', ')+(lostTimes.length>20?' … ('+lostTimes.length+' total)':'')+' — those are the times the box turned red.');
@@ -1815,13 +1793,10 @@ async function findBestMovementClips(){
         let matched=null;
         if(people.length){
           let bestD=Infinity;
-          people.forEach(p=>{ const cx=p.x+p.w/2, cy=p.y+p.h/2; const d=Math.sqrt(Math.pow((cx-prevAnchor.cx)/video.videoWidth,2)+Math.pow((cy-prevAnchor.cy)/video.videoHeight,2)); if(d<bestD){bestD=d;matched={cx,cy,confidence:p.score,w:p.w,h:p.h};} });
+          people.forEach(p=>{ const cx=p.x+p.w/2, cy=p.y+p.h/2; const d=Math.sqrt(Math.pow((cx-prevAnchor.cx)/video.videoWidth,2)+Math.pow((cy-prevAnchor.cy)/video.videoHeight,2)); if(d<bestD){bestD=d;matched={cx,cy};} });
           if(bestD>0.45) matched=null;
         }
-        if(matched){
-          samples.push({t, cx:matched.cx, cy:matched.cy}); prevAnchor=matched;
-          trackingCacheFor(sourceIdentity,trackingTargetId).set(t.toFixed(3),{t,cx:matched.cx,cy:matched.cy,confidence:matched.confidence,w:matched.w,h:matched.h,lost:false,lowConfidence:false});
-        }
+        if(matched){ samples.push({t, cx:matched.cx, cy:matched.cy}); prevAnchor=matched; }
         else { samples.push({t, cx:null, cy:null}); }
       }catch(err){ log('Movement sample failed at '+fmt(t)+': '+err.message); samples.push({t, cx:null, cy:null}); }
     }
