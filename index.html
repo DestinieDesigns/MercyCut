@@ -120,7 +120,7 @@
   <p class="warn">If you downloaded only this app file by itself, the videos above will not play — keep the two tutorial video files in the same folder as this file, or watch them on the MercyCut website where they are already included.</p>
   </div>
   <div id="helpText" hidden>
-  <p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Pick the person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips.</p>
+  <p style="max-width:900px">Simple flow, no prompt, no captions needed: 1. Upload a video. 2. Leave “Clip every person separately” ticked — each person on screen gets their own clip, as many people as your “clips in total” limit allows — or pick one person to follow. 3. Find the best movement clips. 4. Tick the clips you want and press Save Picked Clips.</p>
   <p style="max-width:900px">Your clips are saved automatically in this browser, so a refresh or a closed tab does not lose them — they come back when you reopen this page. The video file itself is not stored, so open the same video again to preview and export. Press Clear clips in the Clip Library to start a fresh session.</p>
   <p><strong>No Python. No install. No upload.</strong> Open this file in Chrome or Edge, pick a video from your computer, and edit it right in this tab. Your video never leaves this device — there is no server here to send it to.</p>
   <p class="warn">Honest limits, please read: browsers cannot play every format (MP4 works best; MKV and some MOV files may not play). Export runs in real time, so a 60-second clip takes about 60 seconds to export, and you must keep this tab in front while it exports. For very long services, cut short clips first. The desktop version is still faster for 2–3 hour files.</p>
@@ -203,7 +203,7 @@
       <div class="card" id="movementCard">
         <h3 style="margin-top:0">Find Best Movement Clips — no captions, no transcript, no prompt</h3>
         <p>Movement means how far the person you picked moves — left, right, up, down — between samples. The app watches the whole video, measures movement in every window of the clip length you pick below, and picks the windows with the most movement. Singing, music, and quiet talking do not matter here, because we watch movement, not sound.</p>
-        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip. If a live Export comes out choppy (about 4 frames a second), press “Export Offline (smooth)” on that clip instead — it renders frame by frame at 30fps, slower to export, but smooth to watch.</p>
+        <p><b>Steps:</b> 1. Upload a video above. 2. In “Follow a person” below, click the person to follow (Person 1, 2, 3, or 4). If you do not pick one, it will pick the largest, most central person at the start — check it is the right person. 3. Press “Find Best Movement Clips” here. It will sample the video, find the best clips, and track the person in each one automatically. 4. When tracking hits 100%, the clip is ready to export — no Review click, no Approve click. Just tick the clips you want in My Clips and press “Save Picked Clips”, or press Export on a single clip. If a live Export comes out choppy (about 4 frames a second), press “Export Offline (smooth)” on that clip instead — it renders frame by frame at 30fps, slower to export, but smooth to watch.<br><b>More than one person on screen:</b> leave “Clip every person separately” ticked and the scanner follows each person on its own and cuts one clip per person. Everyone gets one clip before anyone gets a second one, but the total is still capped by “Find up to … clips in total”: if more people are on screen than that number, the people left over get no clip. Raise the limit before you scan if you want everyone covered. A moment only becomes a clip when that person is in the frame for the whole window, their head is inside the exported frame, and they actually move. Untick it if you only want the one person you picked.</p>
         <p><b>Tracking speed &amp; smoothness — click to change:</b> Pick a preset in one tap, or change the three settings below it yourself. Change these before you press Find Best Movement Clips. If clips are already tracked, change them then press “Retry Tracking for Clip” to re-track with the new settings.</p>
         <div class="row"><button id="movementPresetFastest">Fastest</button><button id="movementPresetFastSmooth">Fast &amp; Smooth</button><button id="movementPresetAccurate">Most Accurate</button><button id="movementPresetSmoothest">Smoothest</button><button id="movementPresetFinest">Finest (0.1s)</button></div>
         <div class="row"><label>Track check every <select id="movementTrackStep"><option value="0.033">Every frame (0.033s, very slow)</option><option value="0.1">0.1 seconds (very detailed, slow)</option><option value="0.5">0.5 seconds (most checks, slowest)</option><option value="1" selected>1 second (fast &amp; smooth)</option><option value="2">2 seconds (fastest, roughest)</option><option value="5">5 seconds (fastest, beta trail recommended)</option></select></label><label>Detection size <select id="movementTrackSize"><option value="640">640 (most accurate)</option><option value="512" selected>512 (balanced)</option><option value="384">384 (fastest)</option></select></label><label>Crop smoothness <input id="movementSmoothness" type="range" min="0" max="100" value="70" style="width:120px"> <span id="movementSmoothnessValue">70%</span></label></div>
@@ -211,7 +211,8 @@
         <div class="row"><label><input type="checkbox" id="betaMotionTrail"> Beta: Motion trail — faint gold line following direction (tracking view only, NOT in export)</label></div>
         <div id="trackingOverlayInfo" class="statusLine" aria-live="polite">Tracking boxes will appear on the video while tracking runs. Green = person found, red dashed = lost, holding last position.</div>
         <p style="font-size:0.9em">Fastest = fewest checks, quickest, crop may jump a bit. Fast &amp; Smooth = the balanced default. Most Accurate = checks every 0.5 seconds at full size, slowest, most precise. Smoothest = very smooth crop, but may lag a little if the person walks fast. Export itself is still real-time in a browser — a 2-minute clip takes about 2 minutes to save — that part cannot be sped up here without a different export tool.</p>
-        <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips</label><label>Clip length <select id="movementClipLength"><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="60">1 minute</option><option value="120" selected>2 minutes</option><option value="300">5 minutes</option></select></label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
+        <div class="row"><label><input type="checkbox" id="movementAllPeople" checked> <span id="movementAllPeopleText">Clip every person separately — one video per person, up to the total clips set below</span></label></div>
+        <div class="row"><label>Find up to <input id="movementCount" type="number" min="1" max="20" value="5" style="width:64px"> clips in total</label><label>Clip length <select id="movementClipLength"><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="60">1 minute</option><option value="120" selected>2 minutes</option><option value="300">5 minutes</option></select></label><label>Check movement every <select id="movementSample"><option value="2">2 seconds (most accurate, slower)</option><option value="5" selected>5 seconds (balanced)</option><option value="10">10 seconds (fastest, rougher)</option></select></label><label>Skip first <input id="movementSkipMinutes" type="number" min="0" max="600" value="0" style="width:64px"> minutes</label></div>
         <div class="row"><button id="movementFind">Find Best Movement Clips</button><button id="movementStop" disabled>Stop Movement Search</button></div>
         <p style="font-size:0.9em"><b>Scanner skips empty places:</b> a window only becomes a clip if a person is found in at least 80% of its samples. Places with no one in the video are skipped completely — they never become clips.</p>
         <div class="row"><button id="testOfflineExporter">Test offline exporter (loads it, no clip needed)</button></div>
@@ -385,11 +386,6 @@ function computeCrop(sw, sh, ow, oh, cx, cy){
   }
   // Wider than source: keep whole frame, fill sides (blurred in preview/export)
   return {x:0, y:0, w:sw, h:sh, fill:true};
-}
-function nearestPerson(persons,last,maxDistance){
-  let best=null,bestD=Infinity;
-  for(const p of persons){const d=Math.hypot(p.cx-last.cx,p.cy-last.cy);if(d<bestD){bestD=d;best=p;}}
-  return best && bestD < maxDistance ? best : null;
 }
 function sortPeopleLeftToRight(people){return people.slice().sort((a,b)=>(a.x+a.w/2)-(b.x+b.w/2));}
 function interp(points, t){
@@ -759,7 +755,7 @@ function renderClips(){
     title.addEventListener('click',e=>e.stopPropagation());title.addEventListener('change',()=>{if(activeExportIds.size){title.value=c.name;return;}const next=title.value.trim()||'Untitled clip';if(next!==c.name){if(i===sel){$('clipName').value=next;updateRangeUI();return;}c.name=next;markClipEdited(c);}renderClips();});top.appendChild(title);card.appendChild(top);
     const duration=Math.max(0,c.end-c.start);
     const times=document.createElement('div');times.className='clipTimes';times.textContent=fmtFull(c.start)+' to '+fmtFull(c.end)+' · '+duration.toFixed(1)+' seconds';card.appendChild(times);
-    const meta=document.createElement('div');meta.className='clipMeta';meta.textContent=approvalLabel(c)+' · Tracking: '+clipTrackingLabel(c)+' · Export: '+clipExportLabel(c)+(c.exportError?' · '+c.exportError:'');card.appendChild(meta);
+    const meta=document.createElement('div');meta.className='clipMeta';meta.textContent=(c.personLabel?c.personLabel+' · ':'')+approvalLabel(c)+' · Tracking: '+clipTrackingLabel(c)+' · Export: '+clipExportLabel(c)+(c.exportError?' · '+c.exportError:'');card.appendChild(meta);
     const actions=document.createElement('div');actions.className='clipActions';
     const action=(label,fn,titleText,parent=actions)=>{const b=document.createElement('button');b.textContent=label;if(titleText)b.title=titleText;b.addEventListener('click',e=>{e.stopPropagation();fn();});parent.appendChild(b);return b;};
     const exportButton=action('Export',async()=>{if(activeExportIds.size||!await resolveUnsavedEdits())return;loadClipToUI(c);renderClips();await exportClip(c);},!isApprovedClip(c)?'Approve this clip before exporting':!trackingExportReady(c)?'Tracking must finish or be corrected with keyframes':'Export this approved clip');
@@ -844,7 +840,7 @@ function resolveUnsavedEdits(){
   if(!$('unsavedDialog').showModal){const discard=confirm('You have unsaved clip changes. Press OK to discard them, or Cancel to keep editing.');if(discard)discardCurrentChanges();return Promise.resolve(discard);}
   $('unsavedDialog').showModal();return new Promise(resolve=>{pendingUnsavedResolver=resolve;});
 }
-async function duplicateClip(c){if(!await resolveUnsavedEdits())return;const clone=JSON.parse(JSON.stringify(c));clone.id=newClipId();clone.number=Math.max(0,...clips.map(x=>x.number||0))+1;clone.name=c.name+' copy';clone.reviewed=false;clone.approvalState='needs-review';clone.approvedAt=null;clone.exportStatus='not-exported';clone.exportOutdated=!!clone.exportedAt;clone.batchSelected=false;clone.track=[];clone.trackingValidated=false;clone.trackingProgress=0;clone.trackingError='';clone.trackingStatus='queued';clone.trackingTargetId=trackingTargetId||'';clips.push(clone);projectDirty=true;loadClipToUI(clone);renderClips();queueClipTracking(clone);log('Duplicated '+c.name+' as '+clone.name+'; automatic tracking queued.');}
+async function duplicateClip(c){if(!await resolveUnsavedEdits())return;const clone=JSON.parse(JSON.stringify(c));clone.id=newClipId();clone.number=Math.max(0,...clips.map(x=>x.number||0))+1;clone.name=c.name+' copy';clone.reviewed=false;clone.approvalState='needs-review';clone.approvedAt=null;clone.exportStatus='not-exported';clone.exportOutdated=!!clone.exportedAt;clone.batchSelected=false;clone.track=[];clone.trackingValidated=false;clone.trackingProgress=0;clone.trackingError='';clone.trackingStatus='queued';clone.trackingTargetId=(c.targetAnchor&&c.trackingTargetId)?c.trackingTargetId:(trackingTargetId||'');clips.push(clone);projectDirty=true;loadClipToUI(clone);renderClips();queueClipTracking(clone);log('Duplicated '+c.name+' as '+clone.name+'; automatic tracking queued.');}
 async function deleteClip(i){if(i===sel&&!await resolveUnsavedEdits())return;if(i===sel&&projectDirty&&!confirm('This clip has edits not yet saved to JSON. Remove it and discard those edits?'))return;const removed=clips[i];if(!removed)return;clips.splice(i,1);projectDirty=true;if(i===sel){sel=-1;resetToNewClip();}else if(sel>i)sel--;renderClips();log('Removed '+removed.name+' from this project. The source video was not changed.');}
 function renderKeys(){
   const c = curClip(); const el = $('keyList');
@@ -898,7 +894,7 @@ function selectCandidate(i){
   manualCenter={cx,cy}; cropWasDragged=false;
   $('selInfo').textContent='You selected Person '+selectedPersonNumber+'. Queued clips will use this source target.';
   $('selInfo').className='ok'; $('autoTrack').textContent='Retry Tracking for Clip';
-  for(const c of clips.filter(x=>x.sourceName===sourceName&&(x.trackingStatus==='waiting-target'||x.trackingStatus==='queued'||x.trackingTargetId&&x.trackingTargetId!==trackingTargetId))){markClipEdited(c);c.trackingRevision=(c.trackingRevision||0)+1;c.trackingTargetId=trackingTargetId;c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.track=[];c.trackingValidated=false;c.trackingStatus='queued';c.trackingError='';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}
+  for(const c of clips.filter(x=>x.sourceName===sourceName&&!x.targetAnchor&&(x.trackingStatus==='waiting-target'||x.trackingStatus==='queued'||x.trackingTargetId&&x.trackingTargetId!==trackingTargetId))){markClipEdited(c);c.trackingRevision=(c.trackingRevision||0)+1;c.trackingTargetId=trackingTargetId;c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.track=[];c.trackingValidated=false;c.trackingStatus='queued';c.trackingError='';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}
   log('Selected Person '+selectedPersonNumber+'. Queued clips will begin tracking automatically.'); renderCandidates(); drawPreview();processTrackingQueue();
 }
 function loadScript(src){
@@ -943,8 +939,12 @@ function queueClipTracking(c){
   if(!c)return;
   markClipEdited(c);c.trackingValidated=false;projectDirty=true;
   c.trackingRevision=(c.trackingRevision||0)+1;c.trackingError='';c.trackingProgress=0;
-  if(!selectedAnchor||!trackingTargetId){c.trackingStatus='waiting-target';renderClips();return;}
-  c.trackingTargetId=trackingTargetId;c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.trackingStatus='queued';
+  // Clips made by the every-person scan keep their own person; manual clips use the
+  // person chosen in "Follow a person".
+  const ownTarget=!!(c.targetAnchor&&c.trackingTargetId);
+  if(!ownTarget&&(!selectedAnchor||!trackingTargetId)){c.trackingStatus='waiting-target';renderClips();return;}
+  if(!ownTarget)c.trackingTargetId=trackingTargetId;
+  c.sourceIdentity=c.sourceIdentity||sourceIdentity;c.trackingStatus='queued';
   if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);
   projectDirty=true;renderClips();setTimeout(processTrackingQueue,0);
 }
@@ -1096,13 +1096,19 @@ async function detectPeopleForTracking(v,ctx,canvas,model,scale){
   const preds=await model.detect(canvas);
   return preds.filter(p=>p.class==='person').map(p=>({cx:(p.bbox[0]+p.bbox[2]/2)/scale,cy:(p.bbox[1]+p.bbox[3]/2)/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,confidence:p.score}));
 }
-function nearestPerson(persons,target,maxDistance,minScore){
+function nearestPerson(persons,target,maxDistance,minScore,lastH){
   let best=null,bestDistance=Infinity;
   for(const p of persons){
+    // Size gate: with several people in frame the nearest centre can be the wrong
+    // person (a child beside an adult, or someone walking past). Ignore boxes that
+    // are wildly taller/shorter than the person we were following.
+    if(lastH>0&&p.h>0){const ratio=p.h/lastH;if(ratio<0.5||ratio>2.0)continue;}
     const d=Math.hypot(p.cx-target.cx,p.cy-target.cy);
     if(d<bestDistance){bestDistance=d;best=p;}
   }
-  return best&&bestDistance<=maxDistance&&best.confidence>=minScore?best:null;
+  if(!best||bestDistance>maxDistance)return null;
+  if(minScore!=null&&Number.isFinite(best.confidence)&&best.confidence<minScore)return null;
+  return best;
 }
 // Runs of consecutive frames where a person was found, long enough to be a clip.
 function foundRuns(points){
@@ -1114,7 +1120,11 @@ function foundRuns(points){
   return runs.filter(r=>r.length>=2&&(r[r.length-1].t-r[0].t)>=TRACK_MIN_SEGMENT-0.001);
 }
 async function runAutomaticTracking(c){
-  const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...selectedAnchor},sid=c.sourceIdentity||sourceIdentity;
+  // A per-person clip carries its own anchor and target id, so two people can be
+  // tracked from the same moment without the global "Follow a person" choice
+  // pulling either clip onto the other person.
+  const usesGlobalTarget=!c.targetAnchor;
+  const revision=c.trackingRevision,targetId=c.trackingTargetId||trackingTargetId,anchor={...(c.targetAnchor||selectedAnchor)},sid=c.sourceIdentity||sourceIdentity;
   if(!anchor||!targetId)throw new Error('Select the person to follow once in the source video.');
   if(c.sourceName&&c.sourceName!==sourceName)throw new Error('Load the matching source video: '+c.sourceName+'.');
   if(sid!==sourceIdentity)throw new Error('Tracking target belongs to a different source recording.');
@@ -1128,20 +1138,20 @@ async function runAutomaticTracking(c){
   const cache=trackingCacheFor(sid,targetId);
   const times=trackingFrameTimes(c.start,c.end);
   if(times.length>4000)log('This clip needs '+times.length+' frame checks, which will take a while. Tracking saves as it goes: leave the tab open and you can switch away.');
-  let last=anchor,points=[],lostTimes=[],relaxedCount=0;
+  let last=anchor,points=[],lostTimes=[],relaxedCount=0,lastH=Number(c.targetAnchor&&c.targetAnchor.h)||0;
   const startedAt=Date.now();
   keepTrackingAlive(true);requestWakeLock();
   try{
     for(let n=0;n<times.length;n++){
       if(trackStop)throw new Error('Tracking was cancelled.');
-      if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||trackingTargetId!==targetId||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
+      if(c.trackingRevision!==revision||c.trackingTargetId!==targetId||(usesGlobalTarget&&trackingTargetId!==targetId)||sourceIdentity!==sid)throw new Error('Clip range, source video, or selected person changed during tracking.');
       const t=times[n],key=t.toFixed(3),cached=cache.get(key);
       let persons=[],best=null,point;
       if(cached){point={...cached};}
       else{
         await seekTrackingVideo(v,t);
         persons=await detectPeopleForTracking(v,ctx,canvas,model,scale);
-        best=nearestPerson(persons,last,v.videoWidth*.60,.50);
+        best=nearestPerson(persons,last,v.videoWidth*.60,.50,lastH);
         if(!best){
           // Retry the same frame with a looser match before this frame counts as empty.
           best=nearestPerson(persons,last,v.videoWidth*.90,.35);
@@ -1152,7 +1162,7 @@ async function runAutomaticTracking(c){
       }
       points.push(point);
       if(point.lost)lostTimes.push(t);
-      else{last={cx:point.cx,cy:point.cy};if(best)lastTrackBox={w:best.w,h:best.h};pushMotionTrail(t,point.cx,point.cy);}
+      else{last={cx:point.cx,cy:point.cy};if(best)lastTrackBox={w:best.w,h:best.h};if(best&&best.h>0)lastH=best.h;pushMotionTrail(t,point.cx,point.cy);}
       const done=n+1,elapsed=(Date.now()-startedAt)/1000,perFrame=elapsed/Math.max(1,done),remaining=Math.round(perFrame*(times.length-done));
       c.trackingProgress=Math.round(done/times.length*100);
       if(sel===clips.indexOf(c)){
@@ -1227,9 +1237,9 @@ async function runAutomaticTracking(c){
   log('Tracking ready for '+c.name+': '+c.track.length+' frames at '+(trackingStepSeconds()?'every '+trackingStepSeconds()+'s':'every frame')+', all person-present.'+(trimmed?' Trimmed to '+fmtFull(c.start)+'–'+fmtFull(c.end)+' because nobody was found outside that range.':'')+(extras.length?' Split into '+extras.length+' extra clip(s) around the moments with no person.':''));
 }
 async function processTrackingQueue(){
-  if(trackingQueueRunning||!selectedAnchor||!trackingTargetId||!video.videoWidth||activeExportIds.size)return;
+  if(trackingQueueRunning||!video.videoWidth||activeExportIds.size)return;
   trackingQueueRunning=true;
-  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=selectedAnchor&&trackingTargetId?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{
+  try{while(trackingQueue.length){const id=trackingQueue.shift(),c=clips.find(x=>x.id===id);if(!c||c.trackingStatus!=='queued')continue;if(!(c.targetAnchor&&c.trackingTargetId)&&(!selectedAnchor||!trackingTargetId)){c.trackingStatus='waiting-target';continue;}trackBusy=true;trackStop=false;try{await runAutomaticTracking(c);}catch(err){if(/cancelled/i.test(err.message)){c.trackingStatus=(c.targetAnchor&&c.trackingTargetId)||(selectedAnchor&&trackingTargetId)?'needs-review':'waiting-target';c.trackingValidated=false;c.trackingError='Tracking was cancelled or stopped; retry when ready.';}else if(/changed during tracking/i.test(err.message)){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);}else{
           const attempts=(c.trackingAttempts||0)+1;c.trackingAttempts=attempts;
           if(!err.detectorLoad&&attempts<=2){c.trackingStatus='queued';if(!trackingQueue.includes(c.id))trackingQueue.push(c.id);log('Automatic tracking for '+c.name+' hit a snag ('+(err.message||err)+') — retrying automatically ('+attempts+' of 2).');renderClips();continue;}
           c.trackingStatus='failed';c.trackingValidated=false;c.trackingError=err.message;log('Automatic tracking failed for '+c.name+': '+err.message);if(err.detectorLoad){const rest=trackingQueue.splice(0);rest.forEach(qid=>{const q=clips.find(x=>x.id===qid);if(q&&q.trackingStatus==='queued'){q.trackingStatus='failed';q.trackingValidated=false;q.trackingError=err.message;}});log('Stopped the tracking queue: the person detector could not load, so no clip was marked as having "no person".');}}renderClips();}finally{trackBusy=false;trackStop=false;}}
@@ -1287,7 +1297,7 @@ $('detectPeople').addEventListener('click',()=>{
   video.pause();$('playBtn').textContent='▶ Play'; requestPeopleDetection(0);
 });
 $('clearSel').addEventListener('click', () => {
-  selectedPerson=null; selectedAnchor=null; selectedPersonNumber=null;trackingTargetId='';trackStop=true;trackingQueue=[];clips.filter(c=>c.sourceName===sourceName&&c.trackingStatus!=='ready').forEach(c=>{c.trackingRevision=(c.trackingRevision||0)+1;c.trackingStatus='waiting-target';c.trackingValidated=false;c.trackingError='Select a person to resume automatic tracking.';});renderClips(); renderCandidates();
+  selectedPerson=null; selectedAnchor=null; selectedPersonNumber=null;trackingTargetId='';trackStop=true;trackingQueue=[];clips.filter(c=>c.sourceName===sourceName&&!c.targetAnchor&&c.trackingStatus!=='ready').forEach(c=>{c.trackingRevision=(c.trackingRevision||0)+1;c.trackingStatus='waiting-target';c.trackingValidated=false;c.trackingError='Select a person to resume automatic tracking.';});renderClips(); renderCandidates();
   $('autoTrack').textContent='Retry Tracking for Clip';
   $('selInfo').textContent='No person selected. Click a numbered box or Person button under the video.';
   $('selInfo').className='warn'; log('Selection cleared. Choose a person from the current frame to resume automatic tracking.');
@@ -1682,7 +1692,7 @@ if($('autoSaveClips'))$('autoSaveClips').addEventListener('change',()=>{
   if($('autoSaveClips').checked)setTimeout(autoSaveReadyClips,0);
 });
 const activeExportIds=new Set();
-const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','cloudDest','cloudDestUse','cloudOpen','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter'];
+const exportControlIds=['fileInput','newClip','clipName','addClip','playBtn','playClip','loopClip','toggleOutput','slider','startMarker','endMarker','setStart','setEnd','startIn','endIn','saveChanges','cancelChanges','preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','cloudDest','cloudDestUse','cloudOpen','autoTrack','stopTrack','addKey','clearKeys','detectPeople','clearSel','exportSel','exportAll','exportSelectedClips','exportAllClips','approveSelectedClips','rejectSelectedClips','approvalFilter','movementFind','movementStop','movementCount','movementClipLength','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementPresetFastest','movementPresetFastSmooth','movementPresetAccurate','movementPresetSmoothest','movementPresetFinest','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','audioDelayReset','clearTrackingOverlay','testOfflineExporter','movementAllPeople'];
 function setExportControlsLocked(locked){
   exportControlIds.forEach(id=>{const el=$(id);if(el)el.disabled=locked;});
   cropBox.style.pointerEvents=locked?'none':'auto';
@@ -1779,6 +1789,7 @@ function applyProjectData(d,opts={}){
         if($('movementSmoothnessValue'))$('movementSmoothnessValue').textContent=$('movementSmoothness').value+'%';
         if($('audioDelayLabel'))$('audioDelayLabel').textContent=audioDelayLabelText(getAudioDelayMs());
         updateMovementEstimate();
+        updateAllPeopleCopy();
       }
       sel=clips.length?0:-1;
       if(!restored && d.sourceName && d.sourceName !== sourceName) log('Warning: project was for "' + d.sourceName + '" but current video is "' + (sourceName||'none') + '". Times may not match — reopen the original video first.');
@@ -1815,7 +1826,7 @@ $('projInput').addEventListener('change', async e => {
 // Only project data is stored on this device (clips, tracking and settings).
 // The video file itself is never stored, so you reopen the same video to continue.
 const DRAFT_KEY='mercycut-web-draft-v1';
-const DRAFT_SETTING_IDS=['preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','movementTrackStep','movementTrackSize','movementSmoothness','movementCount','movementClipLength','movementSample','movementSkipMinutes','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs'];
+const DRAFT_SETTING_IDS=['preset','outW','outH','exportSize','trackingSmoothness','trackingDetail','movementTrackStep','movementTrackSize','movementSmoothness','movementCount','movementClipLength','movementSample','movementSkipMinutes','personConfidence','personMinSize','personIgnoreCorners','audioDelayMs','movementAllPeople'];
 let draftTimer=null;
 function draftSnapshot(){
   const settings={};
@@ -1864,6 +1875,7 @@ $('clearAllClips').addEventListener('click',()=>{
 let trackingPipelineRunning=false, trackingStopRequested=false;
 function trackingSleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 async function ensureTrackingPerson(clip){
+  if(clip&&clip.targetAnchor&&clip.trackingTargetId) return true;
   if(selectedAnchor && trackingTargetId) return true;
   if(!video.videoWidth) return false;
   const times=[clip.start, clip.start+2, clip.start+5].filter(t=>t<=clip.end);
@@ -1969,6 +1981,100 @@ async function runTrackingPipeline(list){
 // ---- MercyCut v2: movement clips, no captions, no transcript, no prompt ----
 // Review/approval is not part of the movement flow: tracking-ready is the only gate.
 for(const id of ['approveSelectedClips','rejectSelectedClips']){ const el=document.getElementById(id); if(el) el.style.display='none'; }
+// ---- Every person, as their own clip (added 2026-11-26) ----
+// A service has several people on screen: the preacher, singers, someone walking
+// up the aisle. The scanner used to follow one chosen person; it now groups every
+// detection into a person track and cuts one clip per person. Tracks are matched by
+// position only, so two people who cross or swap places can still be confused —
+// that is why each clip carries its person label and the tracking boxes are shown.
+const MULTI_MIN_SAMPLES=3; // detections a person needs before they count as "on screen"
+function scanPeopleLabel(track,W){
+  const meanX=track.points.reduce((a,p)=>a+p.cx,0)/Math.max(1,track.points.length)/(W||1);
+  return meanX<0.36?'left of frame':meanX>0.64?'right of frame':'centre of frame';
+}
+function groupScanPeople(frames,sampleInterval){
+  const W=video.videoWidth||1,H=video.videoHeight||1,step=Math.max(0.5,sampleInterval||1),tracks=[];
+  for(const frame of frames){
+    const people=(frame.people||[]).slice(),pairs=[],usedP=new Set(),usedT=new Set();
+    for(const tr of tracks){
+      const last=tr.points[tr.points.length-1],gap=frame.t-last.t;
+      // A person missed for more than three samples is treated as gone; letting the
+      // gate grow without limit would merge two different people after a cutaway.
+      if(gap>step*3+0.01||gap<=0)continue;
+      const slack=Math.min(3,Math.max(1,gap/step));
+      const allowX=Math.min(0.42*W,0.12*W*slack+last.w*0.75),allowY=Math.min(0.42*H,0.12*H*slack+last.h*0.45);
+      for(const p of people){
+        const dx=Math.abs(p.cx-last.cx),dy=Math.abs(p.cy-last.cy);
+        if(dx<=allowX&&dy<=allowY)pairs.push({tr,p,d:Math.hypot(dx/W,dy/H)});
+      }
+    }
+    pairs.sort((a,b)=>a.d-b.d);
+    for(const pair of pairs){
+      if(usedT.has(pair.tr)||usedP.has(pair.p))continue;
+      usedT.add(pair.tr);usedP.add(pair.p);
+      pair.tr.points.push({t:frame.t,cx:pair.p.cx,cy:pair.p.cy,w:pair.p.w,h:pair.p.h,score:pair.p.score});
+    }
+    for(const p of people){
+      if(usedP.has(p))continue;
+      tracks.push({points:[{t:frame.t,cx:p.cx,cy:p.cy,w:p.w,h:p.h,score:p.score}]});
+    }
+  }
+  const qualified=tracks.filter(tr=>tr.points.length>=MULTI_MIN_SAMPLES).sort((a,b)=>a.points[0].t-b.points[0].t);
+  qualified.forEach((tr,i)=>{tr.id='person-'+(i+1);tr.label='Person '+(i+1)+' ('+scanPeopleLabel(tr,W)+')';});
+  return qualified;
+}
+// Face rule: a clip is only cut when the person's head — the top third of their
+// detected box — sits inside the frame the exporter will actually write. This is a
+// position check on the person box, not face recognition, and it is done on the
+// scan samples, so the live track that follows can still drift.
+function headInsideCrop(pt,ow,oh){
+  const W=video.videoWidth||1,H=video.videoHeight||1;
+  const crop=computeCrop(W,H,ow,oh,pt.cx,pt.cy);
+  if(!crop||crop.fill)return true; // full frame — the head cannot be outside it
+  const head={x:pt.cx-pt.w*0.32,y:pt.cy-pt.h*0.5,w:pt.w*0.64,h:Math.max(12,pt.h*0.34)};
+  const mx=crop.w*0.02,my=crop.h*0.02;
+  return head.x>=crop.x-mx&&head.x+head.w<=crop.x+crop.w+mx&&head.y>=crop.y-my&&head.y+head.h<=crop.y+crop.h+my;
+}
+function scoreWindowsForPerson(track,startAt,endAt,target,allSampleTimes){
+  const min=target*0.75,max=target*1.25,os=outSize(),W=video.videoWidth||1,H=video.videoHeight||1;
+  const chunks=[];
+  if(endAt-startAt<=max)chunks.push({start:startAt,end:endAt});
+  else for(let s=startAt;s<endAt;s+=target)chunks.push({start:s,end:Math.min(endAt,s+target)});
+  const points=track.points.slice().sort((a,b)=>a.t-b.t),out=[];
+  for(const chunk of chunks){
+    if(chunk.end-chunk.start<Math.min(min,endAt-startAt))continue;
+    const windowTimes=allSampleTimes.filter(t=>t>=chunk.start&&t<=chunk.end);
+    const inside=points.filter(p=>p.t>=chunk.start&&p.t<=chunk.end);
+    if(inside.length<2)continue;
+    // Presence is counted with a one-sample bridge: a sample counts when the person
+    // was detected at it, or detected in the samples either side of it. A single
+    // missed detection is detector flicker, not an empty frame — counting it as
+    // absence used to cost a person a whole 2-minute window, which is why other
+    // people on screen ended up with no clip at the default clip length.
+    const step=allSampleTimes.length>1?(allSampleTimes[1]-allSampleTimes[0]):5;
+    let seenSamples=0;
+    for(const t of windowTimes){
+      if(points.some(p=>Math.abs(p.t-t)<step*0.5)){seenSamples++;continue;}
+      const before=points.some(p=>t-p.t>0&&t-p.t<=step*1.5);
+      const after=points.some(p=>p.t-t>0&&p.t-t<=step*1.5);
+      if(before&&after)seenSamples++;
+    }
+    const coverage=windowTimes.length?seenSamples/windowTimes.length:0;
+    if(coverage<0.8)continue; // never clip a window this person is mostly not in
+    let total=0,moving=0;
+    for(let i=1;i<inside.length;i++){
+      const a=inside[i-1],b=inside[i];
+      const dx=(b.cx-a.cx)/W,dy=(b.cy-a.cy)/H,d=Math.sqrt(dx*dx+dy*dy);
+      if(d>=0.02){total+=d;moving++;}
+    }
+    if(!(total>0))continue; // still person, no movement, no clip
+    const faceScore=inside.filter(p=>headInsideCrop(p,os.w,os.h)).length/inside.length;
+    if(faceScore<0.8)continue; // face must be in the exported frame for this person
+    if(moving<Math.min(2,Math.max(1,inside.length-1)))continue;
+    out.push({start:chunk.start,end:chunk.end,track:inside,activityScore:total,movingSamples:moving,sampleCount:inside.length,coverage,faceScore});
+  }
+  return out.sort((a,b)=>b.activityScore-a.activityScore);
+}
 function buildMovementCandidates(samples, startAt, endAt, topN){
   const target=parseFloat($('movementClipLength') ? $('movementClipLength').value : 120)||120, min=target*0.75, max=target*1.25;
   const chunks=[];
@@ -2008,12 +2114,15 @@ function createMovementClips(candidates){
   const vertical=true;
   for(const item of candidates){
     const duration=item.end-item.start;
-    if(avoid&&clips.some(c=>c.sourceName===sourceName&&Math.min(c.end,item.end)-Math.max(c.start,item.start)>=Math.min(c.end-c.start,duration)*.8)){skipped++;continue;}
+    // Overlap is only a duplicate for the SAME person: two people moving at the same
+    // moment are two separate videos, not a repeat.
+    const samePerson=c=>item.personId?c.personId===item.personId:!c.personId;
+    if(avoid&&clips.some(c=>c.sourceName===sourceName&&samePerson(c)&&Math.min(c.end,item.end)-Math.max(c.start,item.start)>=Math.min(c.end-c.start,duration)*.8)){skipped++;continue;}
     const n=Math.max(0,...clips.map(c=>c.number||0))+1;
-    const c={id:newClipId(),number:n,name:'Suggested moment '+String(n).padStart(3,'0'),sourceName,start:item.start,end:item.end,
+    const c={id:newClipId(),number:n,name:item.personLabel?item.personLabel+' moment '+String(n).padStart(3,'0'):'Suggested moment '+String(n).padStart(3,'0'),sourceName,start:item.start,end:item.end,
       outW:vertical?1080:(parseInt($('outW').value)||1080),outH:vertical?1920:(parseInt($('outH').value)||1920),keys:[],track:[],
-      reviewed:false,approvalState:'suggested',approvedAt:null,rejectedAt:null,creationMethod:'auto-movement',sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:trackingTargetId||'',smoothness:($('movementSmoothness') ? parseInt($('movementSmoothness').value)||70 : 70),
-      suggestionRationale:'Best movement: person moved the most in this window. Movement score '+item.activityScore.toFixed(2)+' (filtered, frame-normalised), '+item.movingSamples+' moving samples out of '+item.sampleCount+' detected samples'+(item.totalSamples?(' ('+Math.round((item.coverage||0)*100)+'% of samples had a person)'):'')+'. Scanner skipped places with no person. No captions, no sound used.',
+      reviewed:false,approvalState:'suggested',approvedAt:null,rejectedAt:null,creationMethod:'auto-movement',sourceIdentity,trackingStatus:'queued',trackingProgress:0,trackingValidated:false,trackingTargetId:item.targetId||trackingTargetId||'',personId:item.personId||'',personLabel:item.personLabel||'',targetAnchor:item.anchor||null,smoothness:($('movementSmoothness') ? parseInt($('movementSmoothness').value)||70 : 70),
+      suggestionRationale:(item.personLabel?item.personLabel+' — ':'')+'best movement in this window. Movement score '+item.activityScore.toFixed(2)+' (filtered, frame-normalised), '+item.movingSamples+' moving samples out of '+item.sampleCount+' detected samples'+(item.coverage?(' ('+Math.round(item.coverage*100)+'% of samples had this person)'):'')+(item.faceScore?('; head/face inside the exported frame in '+Math.round(item.faceScore*100)+'% of samples'):'')+'. Scanner skipped places with no person. No captions, no sound used.',
       exportStatus:'not-exported',exportOutdated:false,batchSelected:false,favorite:false};
     clips.push(c); added++;
   }
@@ -2031,6 +2140,19 @@ function perDetectSeconds(size){
   if(size<=384) return 0.3;
   if(size<=512) return 0.5;
   return 0.8;
+}
+// ---- Honest copy for the every-person mode ----
+// "Clip every person separately" cannot beat the "clips in total" limit. With more
+// people on screen than clips allowed, somebody is always left out, so the label,
+// the estimate and the scan report all say how many people the limit can cover
+// instead of promising everyone a video.
+function movementClipLimit(){
+  return Math.max(1, Math.min(20, parseInt($('movementCount') ? $('movementCount').value : 5)||5));
+}
+function updateAllPeopleCopy(){
+  const el=$('movementAllPeopleText'), limit=movementClipLimit();
+  if(!el) return;
+  el.textContent='Clip every person separately — one video per person, up to '+limit+' clip'+(limit===1?'':'s')+' in total. People beyond that limit get no clip, so raise “Find up to … clips in total” below to cover everyone.';
 }
 function updateMovementEstimate(){
   const el=$('movementEstimate');
@@ -2055,13 +2177,15 @@ function updateMovementEstimate(){
   const trackingEst=topN*trackingSamplesPerClip*perDetectSeconds(trackSize);
   const exportEst=topN*clipLengthEst;
   const total=movementEst+trackingEst+exportEst;
-  el.textContent='Estimated time for this video ('+fmtDuration(fullDuration)+' long, skipping '+fmtDuration(skipStart)+'): Movement search ~'+fmtDuration(movementEst)+' ('+sampleCount+' samples) + Tracking ~'+fmtDuration(trackingEst)+' ('+topN+' clips × ~'+trackingSamplesPerClip+' checks) + Saving all clips ~'+fmtDuration(exportEst)+' (real time, '+fmtDuration(clipLengthEst)+' per clip) = about '+fmtDuration(total)+' if you save all '+topN+' clips. Saving only the clips you tick will be less. These are estimates — your computer speed will change them, and the timer while it runs will adjust to your actual speed.';
+  el.textContent='If several people are on screen, each one gets their own clip until the '+topN+'-clip total is used up, so tracking and saving multiply by the number of people who fit inside that limit. '+ 'Estimated time for this video ('+fmtDuration(fullDuration)+' long, skipping '+fmtDuration(skipStart)+'): Movement search ~'+fmtDuration(movementEst)+' ('+sampleCount+' samples) + Tracking ~'+fmtDuration(trackingEst)+' ('+topN+' clips × ~'+trackingSamplesPerClip+' checks) + Saving all clips ~'+fmtDuration(exportEst)+' (real time, '+fmtDuration(clipLengthEst)+' per clip) = about '+fmtDuration(total)+' if you save all '+topN+' clips. Saving only the clips you tick will be less. These are estimates — your computer speed will change them, and the timer while it runs will adjust to your actual speed.';
   if(trackStep<=0.1) el.textContent+=' Warning: '+trackStep+'s means ~'+trackingSamplesPerClip+' checks per 2-min clip — very slow. Try one short clip first.';
 }
 ['movementCount','movementSample','movementSkipMinutes','movementTrackStep','movementTrackSize','movementSmoothness','movementClipLength'].forEach(id=>{
   const el=$(id);
   if(el) el.addEventListener('input', updateMovementEstimate);
 });
+if($('movementCount')) $('movementCount').addEventListener('input', updateAllPeopleCopy);
+updateAllPeopleCopy();
 if(video) video.addEventListener('loadedmetadata', updateMovementEstimate);
 function getPersonFilterSettings(){
   const conf=parseFloat($('personConfidence') ? $('personConfidence').value : 0.5)||0.5;
@@ -2119,7 +2243,8 @@ async function findBestMovementClips(){
     const topN=Math.max(1, Math.min(20, parseInt($('movementCount').value)||5));
     $('movementStatus').textContent='Finding people and checking movement. First use downloads the person model. Keep this tab open.';
     await loadCoco();
-    if(!selectedAnchor || !trackingTargetId){
+    const multiPeopleMode=$('movementAllPeople')?$('movementAllPeople').checked:true;
+    if(!multiPeopleMode && (!selectedAnchor || !trackingTargetId)){
       video.pause(); await seekTo(skipStart);
       const off=document.createElement('canvas'), scale=Math.min(1,512/video.videoWidth);
       off.width=Math.round(video.videoWidth*scale); off.height=Math.round(video.videoHeight*scale);
@@ -2133,8 +2258,8 @@ async function findBestMovementClips(){
       selectCandidate(best);
       $('movementStatus').textContent='Picked Person '+(best+1)+' (largest, most central) to follow. If that is the wrong person, stop, click the right person, and start again.';
     }
-    let prevAnchor={cx:selectedAnchor.cx, cy:selectedAnchor.cy};
-    const samples=[];
+    let prevAnchor=selectedAnchor?{cx:selectedAnchor.cx, cy:selectedAnchor.cy}:null;
+    const samples=[],scanFrames=[];
     const times=[];
     for(let t=skipStart; t<fullDuration; t+=sampleInterval) times.push(t);
     if(!times.length) times.push(skipStart);
@@ -2154,8 +2279,11 @@ async function findBestMovementClips(){
         off.getContext('2d').drawImage(video,0,0,off.width,off.height);
         const preds=await cocoModel.detect(off);
         const people=filterPeopleList(preds.filter(p=>p.class==='person').map(p=>({x:p.bbox[0]/scale,y:p.bbox[1]/scale,w:p.bbox[2]/scale,h:p.bbox[3]/scale,score:p.score})));
+        // Every detection is kept for the every-person grouping; the single-person
+        // match below only matters when "Clip every person separately" is unticked.
+        if(multiPeopleMode)scanFrames.push({t,people:people.map(p=>({cx:p.x+p.w/2,cy:p.y+p.h/2,w:p.w,h:p.h,score:p.score}))});
         let matched=null;
-        if(people.length){
+        if(prevAnchor&&people.length){
           let bestD=Infinity;
           people.forEach(p=>{ const cx=p.x+p.w/2, cy=p.y+p.h/2; const d=Math.sqrt(Math.pow((cx-prevAnchor.cx)/video.videoWidth,2)+Math.pow((cy-prevAnchor.cy)/video.videoHeight,2)); if(d<bestD){bestD=d;matched={cx,cy};} });
           if(bestD>0.45) matched=null;
@@ -2164,20 +2292,66 @@ async function findBestMovementClips(){
         else { samples.push({t, cx:null, cy:null}); }
       }catch(err){ log('Movement sample failed at '+fmt(t)+': '+err.message); samples.push({t, cx:null, cy:null}); }
     }
-    if(trackingStopRequested && samples.filter(s=>s.cx!==null).length<3){
+    const detectedSamples=multiPeopleMode?scanFrames.filter(f=>f.people&&f.people.length).length:samples.filter(s=>s.cx!==null).length;
+    if(trackingStopRequested && detectedSamples<3){
       $('movementStatus').textContent='Movement search stopped. Not enough movement samples to make clips. Try again with a longer video or a clearer person.'; return;
     }
-    const candidatesMove=buildMovementCandidates(samples, skipStart, fullDuration, topN);
-    const withMovement=candidatesMove.filter(c=>c.activityScore>0);
-    if(!withMovement.length){
+    let toCreate=[], peopleFound=0, peopleEligible=0, limitStopped=false;
+    if(multiPeopleMode){
+      const people=groupScanPeople(scanFrames,sampleInterval);
+      peopleFound=people.length;
+      if(!people.length){
+        $('movementStatus').textContent='No person was found in three or more samples, so nothing was cut. Try a clearer video, or check the person filters (size and confidence).';
+        return;
+      }
+      const perPerson=people.map(track=>({track,windows:scoreWindowsForPerson(track,skipStart,fullDuration,clipLengthSel,times)}));
+      const usable=perPerson.filter(p=>p.windows.length);
+      peopleEligible=usable.length;
+      if(!usable.length){
+        $('movementStatus').textContent='Found '+people.length+' person(s), but no window passed the checks. A window only becomes a clip when that person is found in at least 80% of its samples, actually moves, and keeps their head inside the exported frame. Try a shorter clip length, a wider Size preset, or “Any size”.';
+        return;
+      }
+      // Everyone gets one clip before anyone gets a second one.
+      const picked=[];
+      for(let round=0;round<Math.max(1,topN);round++){
+        for(const p of usable){
+          if(picked.length>=topN)break;
+          const w=p.windows[round]; if(!w)continue;
+          const startPoint=p.track.points.find(q=>q.t>=w.start)||p.track.points[p.track.points.length-1];
+          picked.push({...w,personId:p.track.id,personLabel:p.track.label,anchor:{cx:startPoint.cx,cy:startPoint.cy,w:startPoint.w,h:startPoint.h},targetId:sourceIdentity+'|scan:'+p.track.id+'@'+Math.round(startPoint.cx)+','+Math.round(startPoint.cy)});
+        }
+      }
+      // The total-clip limit is applied after everyone has had a first turn. If it
+      // ran out before every person had a clip, remember it so the report can say so
+      // instead of quietly dropping those people.
+      limitStopped=picked.length>=topN && usable.some(p=>!picked.some(x=>x.personId===p.track.id));
+      toCreate=picked.sort((a,b)=>a.start-b.start);
+    } else {
+      const candidatesMove=buildMovementCandidates(samples, skipStart, fullDuration, topN);
+      toCreate=candidatesMove.filter(c=>c.activityScore>0);
+    }
+    if(!toCreate.length){
       $('movementStatus').textContent='No clear movement was found. The person may have been still, or was not found in most samples. Try a video where the person moves more, or pick a different person.';
       return;
     }
     const beforeCount=clips.length;
-    const added=createMovementClips(withMovement);
-    if(!added){ $('movementStatus').textContent='Best movement windows were found, but they were all duplicates of clips you already have.'; return; }
+    const added=createMovementClips(toCreate);
+    if(!added){ $('movementStatus').textContent='Best movement windows were found, but they were all duplicates of clips you already have for that person.'; return; }
     const newClips=clips.slice(beforeCount, beforeCount+added);
-    $('movementStatus').textContent='Found '+added+' best movement clip(s), about '+fmtDuration(clipLengthSel)+' each. Now tracking the person in each one automatically — no captions. Wait for tracking to finish, then tick the clips you want and press Save Picked Clips.';
+    // Report how many people the clips actually cover, not just how many exist.
+    const coveredPeople=new Set(newClips.map(c=>c.personId).filter(Boolean)).size;
+    let peopleReport='';
+    if(multiPeopleMode){
+      peopleReport=' — '+coveredPeople+' of '+peopleFound+' people found got their own video';
+      const leftOut=peopleFound-coveredPeople;
+      if(leftOut>0){
+        const why=[];
+        if(limitStopped) why.push('the “clips in total” limit of '+topN+' ran out first — raise it and scan again to reach the rest');
+        if(peopleFound-peopleEligible>0) why.push((peopleFound-peopleEligible)+' had no window where they were found in 80% of the samples, moving, with their head inside the exported frame (a shorter clip length or a wider size preset can help)');
+        peopleReport+='; '+leftOut+' left out'+(why.length?': '+why.join('; '):'')+'';
+      }
+    }
+    $('movementStatus').textContent='Found '+added+' clip(s), about '+fmtDuration(clipLengthSel)+' each'+peopleReport+'. Now tracking the person in each one automatically — no captions. Wait for tracking to finish, then tick the clips you want and press Save Picked Clips.';
     const trackStart=Date.now();
     const trackTimer=setInterval(()=>{
       const elapsed=(Date.now()-trackStart)/1000;
