@@ -1343,7 +1343,14 @@ async function loadOfflineFFmpeg(){
     offlineFetchFile=utilMod.fetchFile;
     const ffmpeg=new ffmpegMod.FFmpeg();
     const base='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm'; // was missing /dist — that made load fail with 404
+    // FFmpeg starts its worker from its own package URL. From any site that is not
+    // jsDelivr (GitHub Pages included) that script is cross-origin and the browser
+    // refuses to start it ("cannot be accessed from origin"), so no offline export
+    // could run at all. jsDelivr's single-file worker bundle has no relative imports,
+    // so it can be fetched into a blob URL and started from our own origin.
+    const workerBase='https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm';
     await ffmpeg.load({
+      classWorkerURL: await utilMod.toBlobURL(`${workerBase}/worker.js/+esm`, 'text/javascript'),
       coreURL: await utilMod.toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await utilMod.toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm')
     });
@@ -1365,16 +1372,19 @@ function buildOfflineCropFilter(c, sw, sh, ow, oh){
   }
   samples.push({t:dur, cx:(cropCenterAt(c, c.end)||{cx:sw/2}).cx});
   const xs=samples.map(s=>Math.round(Math.max(0, Math.min(sw-cw, s.cx-cw/2))));
-  const intervalExpr=(i)=>{
-    const t0=samples[i].t, t1=samples[i+1].t, x0=xs[i], x1=xs[i+1];
-    if(x0===x1||t1===t0) return String(x0);
-    return `trunc(${x0}+(${x1}-${x0})*(t-${t0})/(${t1}-${t0}))`;
-  };
-  const build=(i)=>{
-    if(i>=samples.length-1) return String(xs[xs.length-1]);
-    return `if(lt(t,${samples[i+1].t}),${intervalExpr(i)},${build(i+1)})`;
-  };
-  const expr=build(0);
+  // Piecewise-linear pan written as a flat sum of ramps:
+  //   x(t) = x0 + Σ (x[i+1]-x[i]) * clip((t-t[i])/(t[i+1]-t[i]), 0, 1)
+  // That is the same curve as a chain of if() steps, but the expression stays flat.
+  // A nested if(t<a,..,if(t<b,..)) chain grows one level per second, and FFmpeg's
+  // expression parser fails past roughly 20 levels ("Missing ')' or too many args"),
+  // which silently broke every offline export of a clip longer than about 20 s.
+  const terms=[String(xs[0])];
+  for(let i=0;i<samples.length-1;i++){
+    const dt=samples[i+1].t-samples[i].t, dx=xs[i+1]-xs[i];
+    if(!dx || dt<=0) continue;
+    terms.push(`(${dx})*clip((t-${samples[i].t})/${dt},0,1)`);
+  }
+  const expr='trunc('+terms.join('+')+')';
   return `crop=${cw}:${ch}:x='${expr}':y=0,scale=${ow}:${oh},setsar=1,format=yuv420p`;
 }
 function getAudioDelayMs(){ const el=$('audioDelayMs'); if(!el) return 0; const v=parseInt(el.value,10); return isNaN(v)?0:Math.max(-5000,Math.min(5000,v)); }
@@ -1401,7 +1411,7 @@ async function exportClipOffline(c){
     }
     requestWakeLock();
     const dur=c.end-c.start;
-    log(`Offline export: trimming ${fmtDuration(c.start)} to ${fmtDuration(c.end)}, then rendering at 30fps. This takes longer than the clip — keep this tab in front.`);
+    log(`Offline export: trimming ${fmtDuration(c.start)} to ${fmtDuration(c.end)}, then rendering at 30fps. This takes longer than the clip — you can switch tabs while it renders.`);
     try{ await ffmpeg.deleteFile('segment.mp4'); }catch(e){}
     try{ await ffmpeg.deleteFile('output.mp4'); }catch(e){}
     let code=await ffmpeg.exec(['-ss', String(c.start), '-t', String(dur), '-i', 'input.mp4', '-c', 'copy', 'segment.mp4']); if(typeof code==='number' && code!==0) throw new Error('Trim step failed (FFmpeg code '+code+').');
